@@ -1,0 +1,80 @@
+name: Build and deploy forecast
+
+# ECMWF publishes open data 7-9 hours after each run. The day-15 IFS forecast only
+# exists at 00z and 12z, so the schedule targets those two: 09:30 UTC picks up the 00z
+# run, 21:30 UTC the 12z run. `fetch.latest_run` resolves the newest *complete* run
+# rather than trusting the clock, so a late dissemination degrades to republishing the
+# previous run instead of failing.
+on:
+  schedule:
+    - cron: "30 9 * * *"
+    - cron: "30 21 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deployments race; let a scheduled run finish rather than cancelling it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install the pipeline
+        run: python -m pip install --upgrade pip && pip install -e "./pipeline[dev]"
+
+      - name: Run pipeline tests
+        working-directory: pipeline
+        run: pytest -q
+
+      - name: Build the forecast cube
+        run: python -m precipitation.cli run --model ifs --out web/public/data
+
+      - name: Verify published data
+        run: python .github/scripts/verify_data.py web/public/data
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build the web app
+        working-directory: web
+        run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

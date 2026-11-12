@@ -1,0 +1,22 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Raw GRIB cache — never committed, re-downloadable from ECMWF
+.cache/
+
+# Generated forecast data — produced by the pipeline at build time
+web/public/data/
+
+# Node
+node_modules/
+web/dist/
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
