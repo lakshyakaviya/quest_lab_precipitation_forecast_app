@@ -62,7 +62,7 @@ Requires Python 3.11+ and Node 20.19+.
 python -m venv .venv
 .venv/Scripts/activate            # Windows;  source .venv/bin/activate elsewhere
 pip install -e "./pipeline[dev]"
-pytest pipeline/tests             # 35 tests, no network needed
+pytest pipeline/tests             # 37 tests, no network needed
 
 python -m precipitation.cli latest                        # what runs are published
 python -m precipitation.cli run --model ifs --out web/public/data
@@ -116,6 +116,46 @@ history never accumulates binaries.
 | `web/src/components/PointPanel.tsx` | point timeline and charts |
 | `.github/workflows/forecast.yml` | twice-daily fetch → build → deploy |
 | `.github/scripts/verify_data.py` | gate that stops a bad forecast from deploying |
+
+## Verification
+
+`pytest pipeline/tests` covers the de-accumulation maths, the 3 h → 6 h interval change,
+GRIB packing tolerance, the cube/metadata contract, and timezone handling (37 tests, no
+network needed). Beyond that, two checks confirm the output means what it claims:
+
+**Independent cross-check.** Daily totals compared against Open-Meteo's ECMWF IFS feed —
+same source model, entirely separate pipeline. A units error would show as a 1000×
+factor, the interval bug as 2×:
+
+| Thiruvananthapuram (8.52 N, 76.94 E) | 13 Nov | 14 Nov | 15 Nov | 16 Nov | 17 Nov | 18 Nov | Total |
+|---|---|---|---|---|---|---|---|
+| This pipeline (mm) | 5.4 | 2.2 | 2.0 | 1.0 | 0.2 | 4.2 | **14.9** |
+| Open-Meteo ECMWF (mm) | 4.9 | 2.1 | 2.1 | 1.2 | 0.3 | 4.2 | **14.8** |
+
+(IFS 2026-11-12 12Z run. Chennai agreed to 1.5 vs 1.2 mm; Kolkata was dry in both.)
+
+**Seasonal plausibility.** Mid-November in India is the *northeast* monsoon, so the rain
+should sit over Tamil Nadu, coastal Andhra, Kerala and Sri Lanka, with the Thar desert
+and the Himalaya dry. The 10-day mean south of 15 °N came out **12× wetter** than north
+of 28 °N, with Delhi, Mumbai and Jaisalmer at or near zero. A window extracted from the
+wrong longitudes would fail this immediately.
+
+### Three things that were not what the documentation implied
+
+Each was found by checking against live data rather than trusting an assumption, and
+each is now covered by a test:
+
+1. **The GRIB is stored starting at longitude 180**, so cfgrib presents it as
+   −180…179.75, and 65 °E is column 980 — not column 260 as a 0…360 layout would give.
+   The wrong indexing returns the eastern Pacific with entirely plausible-looking
+   values. Window indices are now derived from the decoded coordinates and asserted.
+2. **Only the 00z and 12z IFS cycles reach day 15**; 06z and 18z stop at T+90h. A plain
+   `latest()` happily returns a short run whose later steps then 404, so run selection
+   is pinned to a run that actually carries the final step.
+3. **`ecmwf-opendata` returns naive datetimes that are already UTC.** Treating one as
+   local time shifted every timestamp by −5:30 on an IST machine — correct in CI, wrong
+   in development. Run times are normalised at the boundary, and the encoder now refuses
+   a naive datetime outright.
 
 ## Known limitations
 
