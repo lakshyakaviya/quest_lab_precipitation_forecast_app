@@ -35,6 +35,25 @@ def test_ensure_utc_is_idempotent():
     assert fetch.ensure_utc(fetch.ensure_utc(aware)) == aware
 
 
+def test_client_date_is_naive_utc():
+    """`ecmwf.opendata` compares the requested date against naive constants.
+
+    Passing it an aware datetime raises "can't compare offset-naive and offset-aware
+    datetimes". This only shows up on a cache miss, so it survived local testing and
+    was caught by CI.
+    """
+    aware = datetime(2026, 11, 12, 0, 0, tzinfo=timezone.utc)
+    client_date = fetch.as_client_date(aware)
+    assert client_date.tzinfo is None
+    assert client_date == datetime(2026, 11, 12, 0, 0)
+
+
+def test_client_date_converts_before_stripping_the_zone():
+    """An IST-aware 05:30 is 00:00 UTC, and must not be sent as a naive 05:30."""
+    ist_morning = datetime(2026, 11, 12, 5, 30, tzinfo=IST)
+    assert fetch.as_client_date(ist_morning) == datetime(2026, 11, 12, 0, 0)
+
+
 def test_meta_records_the_run_hour_unshifted(tmp_path):
     """A 00Z run must be published as 00:00:00Z, not 18:30Z the previous day."""
     from precipitation import transform

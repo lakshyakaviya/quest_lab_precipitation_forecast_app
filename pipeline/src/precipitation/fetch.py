@@ -30,6 +30,17 @@ def ensure_utc(dt: datetime) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
+def as_client_date(dt: datetime) -> datetime:
+    """Strip the timezone back off for `ecmwf.opendata`.
+
+    The client compares the requested date against naive module constants, so handing
+    it a timezone-aware datetime raises
+    `TypeError: can't compare offset-naive and offset-aware datetimes`. We keep aware
+    datetimes everywhere in our own code and convert only at this boundary.
+    """
+    return ensure_utc(dt).replace(tzinfo=None)
+
+
 @dataclass(frozen=True)
 class Run:
     """An identified model run and the local GRIB file holding its precipitation."""
@@ -108,7 +119,7 @@ def fetch(
                 f"{len(model.steps)} steps (attempt {attempt}/{attempts})"
             )
             client.retrieve(
-                date=run_time,
+                date=as_client_date(run_time),
                 stream=model.stream,
                 type=model.type,
                 param=config.PARAM,
