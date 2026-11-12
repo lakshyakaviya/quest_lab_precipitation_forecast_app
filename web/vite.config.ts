@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 
 // Deployed as a GitHub Pages *project* site, so built assets live under the repo path.
 // Dev stays at the root so `npm run dev` opens at localhost:5173/.
-const REPO_BASE = "/quest_lab_precipitation_app/";
+const REPO_BASE = "/quest_lab_precipitation_forecast_app/";
 
 export default defineConfig(({ command }) => ({
   base: command === "build" ? REPO_BASE : "/",

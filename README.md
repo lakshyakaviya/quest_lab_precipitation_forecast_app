@@ -2,8 +2,7 @@
 
 **Ten-day precipitation forecast for India, built from ECMWF Open Data.**
 
-Live: **https://REPLACE-ME.github.io/quest_lab_precipitation_app/**
-<!-- Set after the first Pages deploy; see "Deploying" below. -->
+Live: **https://lakshyakaviya.github.io/quest_lab_precipitation_forecast_app/**
 
 Built for the QUEST Lab Full Stack AI pre-doctoral application by Lakshya Kaviya,
 November 2026.
@@ -91,12 +90,12 @@ python pipeline/tools/build_basemap.py <download_dir> web/src/assets/basemap.jso
 
 The repository deploys itself to GitHub Pages. Once:
 
-1. Push to GitHub as a **public** repo named `quest_lab_precipitation_app` (the name is
-   the Pages base path, set in `web/vite.config.ts`).
+1. Push to GitHub as a **public** repo named `quest_lab_precipitation_forecast_app`
+   (the name is the Pages base path, set as `REPO_BASE` in `web/vite.config.ts` — change
+   both together if you rename the repo).
 2. **Settings → Pages → Build and deployment → Source: GitHub Actions.**
 3. Run the **Build and deploy forecast** workflow once by hand
    (Actions → Build and deploy forecast → Run workflow).
-4. Put the resulting URL at the top of this file.
 
 After that it runs itself at 09:30 and 21:30 UTC, picking up the 00z and 12z runs.
 Forecast data is republished with each deployment rather than committed, so the git
