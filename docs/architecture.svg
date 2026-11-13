@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 804" width="900" height="804" role="img" aria-labelledby="title desc">
+  <title id="title">Monsoon Lens architecture</title>
+  <desc id="desc">Two ECMWF forecasts are aligned to a shared run, processed by a Python pipeline into compact float16 cubes, built and deployed to GitHub Pages four times a day, and read entirely in the browser with no backend.</desc>
+
+  <style>
+    .card   { fill: #171c22; stroke: #2b333c; stroke-width: 1; }
+    .outer  { fill: #0f1215; }
+    .h      { font: 600 14px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #e6edf3; }
+    .t      { font: 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #b6c2cf; }
+    .m      { font: 11px system-ui, -apple-system, "Segoe UI", sans-serif; fill: #7d8894; }
+    .mono   { font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; fill: #b6c2cf; }
+    .blue   { fill: #58a6ff; }
+    .orange { fill: #e0823d; }
+    .arrow  { stroke: #46505a; stroke-width: 1.6; fill: none; }
+    .note   { font: italic 11px system-ui, sans-serif; fill: #7d8894; }
+  </style>
+
+  <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0,0 L10,5 L0,10 z" fill="#46505a"/>
+  </marker>
+
+  <rect class="outer" x="0" y="0" width="900" height="804" rx="14"/>
+
+  <!-- Sources -->
+  <rect class="card" x="40" y="28" width="390" height="104" rx="10"/>
+  <text class="h blue" x="60" y="54">IFS HRES — physics</text>
+  <text class="mono" x="60" y="75">oper/fc · 0p25 · 00z &amp; 12z only</text>
+  <text class="t" x="60" y="94">65 steps to T+240h · 31 MB</text>
+  <text class="m" x="60" y="113">units: m · 3 h then 6 h after T+144h</text>
+
+  <rect class="card" x="470" y="28" width="390" height="104" rx="10"/>
+  <text class="h orange" x="490" y="54">AIFS Single — data-driven</text>
+  <text class="mono" x="490" y="75">oper/fc · 0p25 · all four cycles</text>
+  <text class="t" x="490" y="94">41 steps to T+240h · 17 MB</text>
+  <text class="m" x="490" y="113">units: kg m⁻² · uniform 6 h</text>
+
+  <text class="m" x="450" y="18" text-anchor="middle">ECMWF Open Data · CC BY 4.0</text>
+
+  <!-- Merge into pipeline -->
+  <path class="arrow" d="M235,132 L235,160 Q235,172 247,172 L438,172" marker-end="url(#a)"/>
+  <path class="arrow" d="M665,132 L665,160 Q665,172 653,172 L462,172" marker-end="url(#a)"/>
+  <text class="note" x="450" y="196" text-anchor="middle">common_run — the newest cycle both models have published</text>
+
+  <path class="arrow" d="M450,202 L450,228" marker-end="url(#a)"/>
+
+  <!-- Pipeline -->
+  <rect class="card" x="40" y="228" width="820" height="168" rx="10"/>
+  <text class="h" x="60" y="254">pipeline/ — Python</text>
+  <text class="mono" x="60" y="276">fetch → decode → transform → encode</text>
+
+  <text class="t" x="60" y="302">▪ window derived from decoded coordinates, then asserted</text>
+  <text class="m" x="74" y="319">GRIB starts at longitude 180, so 65°E is column 980 — not 260</text>
+
+  <text class="t" x="60" y="341">▪ units read per file and normalised to millimetres</text>
+  <text class="m" x="74" y="358">AIFS/IFS accumulated tp ratio measured at 949.7 — unit, not physics</text>
+
+  <text class="t" x="470" y="302">▪ de-accumulate, dividing by each interval's own length</text>
+  <text class="m" x="484" y="319">N steps → N−1 frames; a constant divisor doubles rates after T+144h</text>
+
+  <text class="t" x="470" y="341">▪ quality gates, with clamping disclosed per run</text>
+  <text class="m" x="484" y="358">no NaNs · no negatives · plausible peak · exact byte length</text>
+
+  <text class="m" x="60" y="381">peak memory &lt; 400 MB: one global field decoded and subset at a time</text>
+
+  <path class="arrow" d="M450,396 L450,424" marker-end="url(#a)"/>
+
+  <!-- Artifacts -->
+  <rect class="card" x="40" y="424" width="820" height="98" rx="10"/>
+  <text class="h" x="60" y="450">Forecast cubes — float16 mm/h, [frame][lat][lon]</text>
+  <text class="mono blue" x="60" y="474">ifs.f16   64 × 141 × 141 = 2,544,768 B</text>
+  <text class="mono orange" x="60" y="494">aifs.f16  40 × 141 × 141 = 1,590,480 B</text>
+  <text class="t" x="470" y="474">meta.json — grid, every frame's interval and valid time,</text>
+  <text class="t" x="470" y="494">units, run time, stats, SHA-256, clamping diagnostics</text>
+
+  <path class="arrow" d="M450,522 L450,550" marker-end="url(#a)"/>
+
+  <!-- CI -->
+  <rect class="card" x="40" y="550" width="820" height="88" rx="10"/>
+  <text class="h" x="60" y="576">GitHub Actions — four times a day</text>
+  <text class="mono" x="60" y="598">pytest · build cubes · verify_data.py · npm run check · vite build</text>
+  <text class="m" x="60" y="620">two attempts per cycle, because scheduled runs are queued and ran 4.5 h late on 2026-11-12</text>
+
+  <path class="arrow" d="M450,638 L450,666" marker-end="url(#a)"/>
+
+  <!-- Browser -->
+  <rect class="card" x="40" y="666" width="820" height="122" rx="10"/>
+  <text class="h" x="60" y="692">GitHub Pages → the browser · no backend, no API, no keys</text>
+  <text class="t" x="60" y="716">Both forecasts arrive as ~540 KB gzipped and stay in memory, so clicking a</text>
+  <text class="t" x="60" y="734">point is an array lookup. MapLibre renders a self-contained Natural Earth</text>
+  <text class="t" x="60" y="752">basemap; the rain field is coloured into a 141 × 141 canvas we paint ourselves,</text>
+  <text class="m" x="60" y="770">which is also how the physics/AI swipe is done — split in data space, one texture.</text>
+</svg>

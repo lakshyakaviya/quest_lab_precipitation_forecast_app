@@ -46,6 +46,11 @@ Neither is ground truth; this app does not verify either against observations.
 
 ## How it works
 
+![Architecture: two ECMWF forecasts aligned to a shared run, processed into compact float16 cubes, deployed to GitHub Pages four times a day, read entirely in the browser](docs/architecture.svg)
+
+Full detail, including every figure quoted here and how it was checked, is in
+**[docs/METHODS.md](docs/METHODS.md)**.
+
 ```
 ECMWF Open Data ──▶ IFS  GRIB2 (65 steps, 31 MB) ──▶ ifs.f16   64 frames, 2.54 MB
                 └─▶ AIFS GRIB2 (41 steps, 17 MB) ──▶ aifs.f16  40 frames, 1.59 MB
@@ -145,8 +150,9 @@ history never accumulates binaries.
 | `web/src/lib/cube.ts` | cube decode, point sampling, frame colouring |
 | `web/src/map/RainLayer.ts` | the rain raster surface |
 | `web/src/components/PointPanel.tsx` | point timeline and charts |
-| `.github/workflows/forecast.yml` | twice-daily fetch → build → deploy |
+| `.github/workflows/forecast.yml` | scheduled fetch → build → deploy |
 | `.github/scripts/verify_data.py` | gate that stops a bad forecast from deploying |
+| `docs/METHODS.md` | the maths, the unit handling, and how every figure was checked |
 
 ## Verification
 
