@@ -26,6 +26,12 @@ for a rainfall timeline, and put the two forecasts against each other.
 - **Click anywhere** for that cell's rainfall from both models: rate over time,
   cumulative build-up, peak intensity, when the rain starts, a plain-language verdict
   on whether the models agree, and a table view.
+- **Rankings** over the next five days across 44 places: wettest, and — more
+  interestingly — the places the two models most disagree about, which is otherwise
+  something you have to hunt for by dragging the swipe around.
+- **Every view is a link.** Mode, time, selected point and divider position live in the
+  URL. Frames are addressed by lead time rather than index, so a link keeps pointing at
+  the same forecast moment as new runs replace old ones.
 - **No backend.** Both forecasts together are a little over 500 KB on the wire, so every
   query is an array lookup in the browser.
 
@@ -42,6 +48,11 @@ physics models, and the app makes that visible rather than asserting it. On the
 
 The AI model spreads rain over a wider area at lower intensity. In the swipe view the
 physics side is granular and speckled while the AI side is made of large smooth blobs.
+
+The disagreement can be total rather than cosmetic. On the 2026-11-12 12Z run the
+physics model expected **20 mm** over Bhubaneswar in the next five days and the AI model
+expected **0 mm**. The "Models differ" board exists to surface cases like that.
+
 Neither is ground truth; this app does not verify either against observations.
 
 ## How it works

@@ -7,6 +7,7 @@ import { TimeScrubber, type Speed } from "./components/TimeScrubber";
 import { Legend } from "./components/Legend";
 import { ModelSwitch } from "./components/ModelSwitch";
 import { AttributionBar } from "./components/AttributionBar";
+import { buildHash, parseViewState } from "./lib/viewState";
 
 /** Milliseconds per forecast frame at 1x. Slow enough to read, fast enough to feel. */
 const FRAME_MS = 320;
@@ -36,9 +37,24 @@ export default function App() {
       .then(({ primary, comparison: cmp }) => {
         setCube(primary);
         setComparison(cmp);
-        // Open on the frame closest to the present, not on the start of a forecast
-        // that is already partly history.
-        setFrame(primary.frameNearestTime(new Date()));
+
+        // A shared link wins over the defaults. Frames are addressed by lead time,
+        // so the link still points at the same forecast moment in a newer run.
+        const link = parseViewState(window.location.hash);
+        if (link.mode && (cmp || link.mode === "ifs")) setMode(link.mode as ViewMode);
+        if (link.split != null) setSplit(link.split);
+        if (link.lat != null && link.lon != null) {
+          setSelected({ lat: link.lat, lon: link.lon });
+        }
+        setFrame(
+          link.lead != null
+            ? primary.frameNearestTime(
+                new Date(primary.runTime.getTime() + link.lead * 3_600_000),
+              )
+            : // Otherwise open on the frame closest to the present, not on the start
+              // of a forecast that is already partly history.
+              primary.frameNearestTime(new Date()),
+        );
       })
       .catch((e: unknown) => {
         if (controller.signal.aborted) return;
@@ -134,6 +150,22 @@ export default function App() {
     setFrame(f);
   }, []);
 
+  // Keep the URL in step with the view so it can be copied and shared. Replace rather
+  // than push, or scrubbing would fill the back button with hundreds of entries.
+  useEffect(() => {
+    if (!cube) return;
+    const hash = buildHash({
+      mode,
+      lead: cube.stepEnd[frame] ?? null,
+      lat: selected?.lat ?? null,
+      lon: selected?.lon ?? null,
+      split,
+    });
+    if (hash !== window.location.hash) {
+      window.history.replaceState(null, "", hash);
+    }
+  }, [cube, mode, frame, selected, split]);
+
   // On narrow screens the scrubber is a fixed bottom bar, so the page must reserve
   // exactly its height or the last line of the attribution stays stuck underneath.
   // Measured rather than hardcoded: the bar's height changes with the safe-area
@@ -209,6 +241,7 @@ export default function App() {
           frame={frame}
           now={now}
           onFrameSelect={onFrameSelect}
+          onPick={setSelected}
           onClear={() => setSelected(null)}
         />
       </div>

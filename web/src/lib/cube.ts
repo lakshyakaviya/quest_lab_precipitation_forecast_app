@@ -389,6 +389,66 @@ export class Comparison {
   }
 }
 
+export interface PlaceOutlook {
+  name: string;
+  state: string;
+  lat: number;
+  lon: number;
+  /** Total expected over the window, mm, from the physics model. */
+  physicsMm: number;
+  /** Same window from the AI model, or null when only one model is loaded. */
+  aiMm: number | null;
+  /** physics − AI, mm. */
+  diffMm: number;
+}
+
+/**
+ * Totals for a list of places over a forward-looking window.
+ *
+ * Both models are integrated over the *same* wall-clock window, each at its own
+ * resolution, so the comparison is not an artefact of their differing frame lengths.
+ */
+export function placeOutlooks(
+  places: { name: string; state: string; lat: number; lon: number }[],
+  physics: Cube,
+  ai: Cube | null,
+  now: Date,
+  windowHours: number,
+): PlaceOutlook[] {
+  const fromLead = Math.max(0, physics.leadHoursAt(now));
+  const toLead = Math.min(
+    physics.maxLead,
+    ai ? Math.min(ai.maxLead, fromLead + windowHours) : fromLead + windowHours,
+  );
+  const span = Math.max(0, toLead - fromLead);
+
+  const out: PlaceOutlook[] = [];
+  for (const place of places) {
+    const cell = physics.cellAt(place.lat, place.lon);
+    if (!cell) continue;
+    const physicsMm =
+      physics.windowMeanRate(fromLead, toLead, cell.j, cell.i) * span;
+
+    let aiMm: number | null = null;
+    if (ai) {
+      const aiCell = ai.cellAt(place.lat, place.lon);
+      if (aiCell) {
+        aiMm = ai.windowMeanRate(fromLead, toLead, aiCell.j, aiCell.i) * span;
+      }
+    }
+    out.push({
+      name: place.name,
+      state: place.state,
+      lat: place.lat,
+      lon: place.lon,
+      physicsMm,
+      aiMm,
+      diffMm: aiMm === null ? 0 : physicsMm - aiMm,
+    });
+  }
+  return out;
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { cache: "no-cache" });
   if (!res.ok) throw new Error(`${url} -> HTTP ${res.status}`);

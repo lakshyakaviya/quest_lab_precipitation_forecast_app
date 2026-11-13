@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import type { Cube, PointSeries } from "../lib/cube";
+import { Rankings } from "./Rankings";
 import {
   coords,
   formatIst,
@@ -32,6 +33,7 @@ interface Props {
   frame: number;
   now: Date;
   onFrameSelect: (frame: number) => void;
+  onPick: (point: { lat: number; lon: number }) => void;
   onClear: () => void;
 }
 
@@ -53,16 +55,16 @@ export function PointPanel({
   frame,
   now,
   onFrameSelect,
+  onPick,
   onClear,
 }: Props) {
+  // With nothing selected the panel earns its space by answering the obvious
+  // question — where is it going to rain, and where do the models disagree — rather
+  // than sitting empty with a prompt.
   if (!series) {
     return (
       <aside className="panel panel--empty">
-        <h2 className="panel__title">Rainfall at a point</h2>
-        <p className="panel__prompt">
-          Click anywhere on the map to see how rain builds up there over the rest of the
-          forecast, and how the two models differ.
-        </p>
+        <Rankings cube={cube} aiCube={aiCube} now={now} onPick={onPick} />
       </aside>
     );
   }

@@ -3,7 +3,7 @@ import maplibregl, { type Map as MapLibreMap, Marker } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 import type { Comparison, Cube } from "../lib/cube";
-import { PLACES } from "../data/cities";
+import { LABELLED_PLACES } from "../data/cities";
 import { coords, rate as fmtRate } from "../lib/format";
 import { CanvasRainSurface } from "./RainLayer";
 import { RAIN_CANVAS_ID, basemapBbox, buildStyle } from "./basemapStyle";
@@ -46,7 +46,7 @@ const MAX_BOUNDS: [[number, number], [number, number]] = [
   [basemapBbox[2], basemapBbox[3]],
 ];
 
-function placeElement(name: string, rank: 1 | 2): HTMLElement {
+function placeElement(name: string, rank: number): HTMLElement {
   const el = document.createElement("div");
   el.className = `place place--r${rank}`;
   el.innerHTML = `<span class="place__dot"></span><span class="place__name">${name}</span>`;
@@ -174,7 +174,7 @@ export function MapView({
     map.on("load", () => {
       surface.attach(map);
       repaint();
-      for (const place of PLACES) {
+      for (const place of LABELLED_PLACES) {
         new Marker({ element: placeElement(place.name, place.rank), anchor: "left" })
           .setLngLat([place.lon, place.lat])
           .addTo(map);
