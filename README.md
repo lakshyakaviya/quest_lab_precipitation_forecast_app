@@ -9,9 +9,9 @@ November 2026.
 
 ![Monsoon Lens: scrubbing ten days of forecast rainfall over India, opening the board of places the two models most disagree about, swiping the physics forecast against the AI forecast, and viewing the signed difference between them](docs/media/monsoon-lens.gif)
 
-*Recorded from the deployed app on the 2026-11-13 00Z run. The point it settles on is
-Chennai, where the AI model expects 179 mm and the physics model 13 mm — the case
-examined below.*
+*Recorded from a production build of this commit, on the 2026-11-13 00Z run. The point it
+settles on is Chennai, where the AI model expects 179 mm and the physics model 13 mm — the
+case examined below.*
 
 ---
 
