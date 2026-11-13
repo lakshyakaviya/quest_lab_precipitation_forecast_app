@@ -148,7 +148,7 @@ a {
 .map {
   position: relative;
   min-height: 0;
-  background: #091016;
+  background: #141a1f; /* matches MAP_COLORS.sea so there is no flash on load */
 }
 
 .map__canvas {
@@ -409,6 +409,29 @@ a {
   color: var(--text-muted);
 }
 
+/* Explains the 3 h -> 6 h interval change rather than leaving it to be misread. */
+.chart__note {
+  display: block;
+  font-size: 9.5px;
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.3;
+}
+
+.chart__now line {
+  stroke: var(--text-secondary);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}
+
+.chart__now text {
+  fill: var(--text-muted);
+  font-size: 8.5px;
+  font-family: var(--font);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .chart__svg {
   display: block;
   width: 100%;
@@ -532,6 +555,10 @@ a {
   font-weight: 500;
 }
 
+.panel__table tr.is-past td {
+  color: var(--text-muted);
+}
+
 .panel__table tr.is-current td {
   background: rgba(57, 135, 229, 0.12);
   color: var(--text-primary);
@@ -609,6 +636,44 @@ a {
   height: 9px;
   margin-top: -4px;
   background: var(--baseline);
+}
+
+/* The part of the forecast that has already elapsed. */
+.scrubber__past {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 3px;
+  margin-top: -1.5px;
+  border-radius: 2px 0 0 2px;
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(137, 135, 129, 0.55) 0 3px,
+    rgba(137, 135, 129, 0.18) 3px 6px
+  );
+}
+
+.scrubber__nowmark {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 15px;
+  margin-top: -7px;
+  background: var(--text-secondary);
+  border-radius: 1px;
+}
+
+.scrubber__past-tag {
+  margin-left: 8px;
+  padding: 1px 6px;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  vertical-align: middle;
 }
 
 .scrubber input[type="range"] {

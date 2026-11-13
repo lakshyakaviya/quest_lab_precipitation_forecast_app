@@ -54,13 +54,25 @@ export interface PointSeries {
   interval: Float32Array;
   /** Rain accumulated from T+0 to the end of each frame, mm. */
   cumulative: Float32Array;
-  /** Total over the whole forecast, mm. */
+  /** Total over the whole forecast run, mm. */
   total: number;
-  /** Peak rate over the forecast, mm/h. */
+  /**
+   * The frame forward-looking figures are measured from — normally the frame covering
+   * the present moment. The forecast run may be hours old by the time anyone reads it,
+   * so "peak" and "rain starts" must ignore intervals that have already elapsed.
+   */
+  fromFrame: number;
+  /** Total still to come, from `fromFrame` to the end of the forecast, mm. */
+  remainingTotal: number;
+  /** Peak rate from `fromFrame` onward, mm/h. */
   peakRate: number;
-  /** Frame index of the peak. */
   peakFrame: number;
-  /** First frame whose interval total reaches `onsetMm`, or null if it stays dry. */
+  /** Whether it is already raining in the `fromFrame` interval. */
+  rainingNow: boolean;
+  /**
+   * First frame at or after `fromFrame` whose interval total reaches `onsetMm`,
+   * or null if it stays dry for the rest of the forecast.
+   */
   onsetFrame: number | null;
 }
 
@@ -73,6 +85,11 @@ export class Cube {
   /** Interval length in hours for each frame. */
   readonly hours: Float32Array;
   readonly validTimes: Date[];
+  /** Lead time in hours at the start and end of each frame's interval. */
+  readonly stepStart: Float32Array;
+  readonly stepEnd: Float32Array;
+  /** Lead time at the end of the forecast, for chart axes. */
+  readonly maxLead: number;
   private readonly cellsPerFrame: number;
 
   constructor(meta: CubeMeta, values: Float32Array) {
@@ -84,10 +101,39 @@ export class Cube {
     this.cellsPerFrame = this.nLat * this.nLon;
     this.hours = new Float32Array(meta.frames.map((f) => f.hours));
     this.validTimes = meta.frames.map((f) => new Date(f.valid_time));
+    this.stepStart = new Float32Array(meta.frames.map((f) => f.step_start));
+    this.stepEnd = new Float32Array(meta.frames.map((f) => f.step_end));
+    this.maxLead = this.stepEnd[this.nFrames - 1] ?? 0;
   }
 
   get runTime(): Date {
     return new Date(this.meta.run.datetime);
+  }
+
+  /** Lead time in hours of an instant, relative to the forecast run. */
+  leadHoursAt(when: Date): number {
+    return (when.getTime() - this.runTime.getTime()) / 3_600_000;
+  }
+
+  /**
+   * The frame whose interval contains `when`, clamped to the forecast.
+   *
+   * A run is published 7-9 hours after its nominal time and is then the newest for
+   * another 12, so by the time anyone opens the page a good part of the forecast is
+   * already in the past. Everything forward-looking is measured from here.
+   */
+  frameAtTime(when: Date): number {
+    const lead = this.leadHoursAt(when);
+    if (lead <= this.stepEnd[0]!) return 0;
+    for (let f = 0; f < this.nFrames; f++) {
+      if (lead <= this.stepEnd[f]!) return f;
+    }
+    return this.nFrames - 1;
+  }
+
+  /** True when this frame's interval has entirely elapsed. */
+  isPast(frame: number, now: Date): boolean {
+    return this.stepEnd[frame]! <= this.leadHoursAt(now);
   }
 
   /** Nearest grid cell to a geographic position, or null if outside the domain. */
@@ -111,20 +157,32 @@ export class Cube {
     return this.values[frame * this.cellsPerFrame + j * this.nLon + i]!;
   }
 
-  /** Full time series for one point, with interval and cumulative totals derived. */
-  seriesAt(lat: number, lon: number, onsetMm = 0.2): PointSeries | null {
+  /**
+   * Full time series for one point, with interval and cumulative totals derived.
+   *
+   * `fromFrame` is where forward-looking figures start: peak, onset and the remaining
+   * total all ignore intervals that have already elapsed, so the panel never promises
+   * rain at a time that has been and gone.
+   */
+  seriesAt(
+    lat: number,
+    lon: number,
+    { fromFrame = 0, onsetMm = 0.2 }: { fromFrame?: number; onsetMm?: number } = {},
+  ): PointSeries | null {
     const cell = this.cellAt(lat, lon);
     if (!cell) return null;
     const { j, i } = cell;
     const centre = this.cellCentre(j, i);
+    const start = Math.max(0, Math.min(this.nFrames - 1, fromFrame));
 
     const rate = new Float32Array(this.nFrames);
     const interval = new Float32Array(this.nFrames);
     const cumulative = new Float32Array(this.nFrames);
 
     let running = 0;
+    let remainingTotal = 0;
     let peakRate = 0;
-    let peakFrame = 0;
+    let peakFrame = start;
     let onsetFrame: number | null = null;
 
     for (let f = 0; f < this.nFrames; f++) {
@@ -134,6 +192,9 @@ export class Cube {
       interval[f] = mm;
       running += mm;
       cumulative[f] = running;
+
+      if (f < start) continue;
+      remainingTotal += mm;
       if (r > peakRate) {
         peakRate = r;
         peakFrame = f;
@@ -148,8 +209,11 @@ export class Cube {
       interval,
       cumulative,
       total: running,
+      fromFrame: start,
+      remainingTotal,
       peakRate,
       peakFrame,
+      rainingNow: interval[start]! >= onsetMm,
       onsetFrame,
     };
   }

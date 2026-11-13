@@ -17,11 +17,23 @@ export default function App() {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<Speed>(1);
   const [selected, setSelected] = useState<SelectedPoint | null>(null);
+  const [now, setNow] = useState(() => new Date());
+
+  // The clock moves while the page is open, and a run is already several hours old
+  // when it is published, so "now" is re-read periodically rather than captured once.
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
     loadData(controller.signal)
-      .then(({ cube: loaded }) => setCube(loaded))
+      .then(({ cube: loaded }) => {
+        setCube(loaded);
+        // Open on the present, not on the start of a forecast that is partly history.
+        setFrame(loaded.frameAtTime(new Date()));
+      })
       .catch((e: unknown) => {
         if (controller.signal.aborted) return;
         setError(e instanceof Error ? e.message : String(e));
@@ -96,8 +108,11 @@ export default function App() {
 
   const series: PointSeries | null = useMemo(() => {
     if (!cube || !selected) return null;
-    return cube.seriesAt(selected.lat, selected.lon);
-  }, [cube, selected]);
+    // Forward-looking figures start at the frame covering the present moment.
+    return cube.seriesAt(selected.lat, selected.lon, {
+      fromFrame: cube.frameAtTime(now),
+    });
+  }, [cube, selected, now]);
 
   const onFrameSelect = useCallback((f: number) => {
     setPlaying(false);
@@ -170,6 +185,7 @@ export default function App() {
           cube={cube}
           series={series}
           frame={frame}
+          now={now}
           onFrameSelect={onFrameSelect}
           onClear={() => setSelected(null)}
         />
@@ -181,6 +197,7 @@ export default function App() {
         frame={frame}
         playing={playing}
         speed={speed}
+        now={now}
         onFrame={onFrameSelect}
         onTogglePlay={togglePlay}
         onSpeed={setSpeed}

@@ -22,14 +22,23 @@ from pathlib import Path
 from shapely.geometry import box, mapping, shape
 from shapely.ops import unary_union
 
-# A little wider than the data window so the map has context at the edges.
-PAD = 2.0
-LON_MIN, LON_MAX = 65.0 - PAD, 100.0 + PAD
-LAT_MIN, LAT_MAX = 5.0 - PAD, 40.0 + PAD
+# Wider than the data window, and deliberately much wider in longitude than latitude.
+#
+# The app caps panning at this extent so the clipped edge of the geometry never comes
+# into view. MapLibre enforces maxBounds on the *visible* region, so on a landscape
+# viewport a narrow extent forces it to zoom in until the longitude span fits — which
+# cropped South India off the bottom of the default view. Giving longitude far more
+# padding than latitude means the latitude framing is never the thing that gets
+# sacrificed.
+LON_PAD = 14.0
+LAT_PAD = 4.0
+LON_MIN, LON_MAX = 65.0 - LON_PAD, 100.0 + LON_PAD
+LAT_MIN, LAT_MAX = 5.0 - LAT_PAD, 40.0 + LAT_PAD
 CLIP = box(LON_MIN, LAT_MIN, LON_MAX, LAT_MAX)
 
-# ~2 km: far finer than the 0.25 degree (~28 km) forecast grid it sits under.
-SIMPLIFY_DEG = 0.02
+# ~3 km: far finer than the 0.25 degree (~28 km) forecast grid it sits under, and
+# enough to keep the wider extent's extra coastline from bloating the bundle.
+SIMPLIFY_DEG = 0.03
 COORD_DECIMALS = 3  # ~110 m
 
 

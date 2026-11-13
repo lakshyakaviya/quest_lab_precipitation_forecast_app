@@ -18,8 +18,11 @@ import type {
 import basemap from "../assets/basemap.json";
 
 export const MAP_COLORS = {
-  sea: "#091016",
-  land: "#1a1a19",
+  // Near-neutral rather than blue: a blue sea competed with the blue rain ramp, so
+  // light rain over water was lost. Hue now separates water from rain. It is also
+  // kept clearly above the page background, or the map reads as having black margins.
+  sea: "#141a1f",
+  land: "#1e1e1c",
   coast: "#52514e",
   countryBorder: "#3a3a37",
   stateBorder: "#2e2e2b",

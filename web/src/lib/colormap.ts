@@ -21,17 +21,24 @@ export interface ColorStop {
 /** Log-spaced stops. Below `DRY_THRESHOLD_MMH` nothing is drawn at all. */
 export const DRY_THRESHOLD_MMH = 0.05;
 
+/*
+ * The ramp starts at blue 550 rather than 700. The darkest steps were very close in
+ * lightness to the sea behind them, so drizzle was effectively invisible over water —
+ * the most common case in a monsoon forecast. Starting mid-ramp costs a little
+ * dynamic range at the dry end and buys a visible floor; lightness is still monotonic
+ * across the whole scale, and the sea is now a neutral grey so hue separates it too.
+ */
 export const RAIN_STOPS: ColorStop[] = [
-  { mmh: 0.05, rgb: [13, 54, 107], alpha: 0.28 }, // blue 700
-  { mmh: 0.2, rgb: [24, 79, 149], alpha: 0.46 }, // blue 600
-  { mmh: 0.5, rgb: [37, 106, 191], alpha: 0.6 }, // blue 500
-  { mmh: 1, rgb: [42, 120, 214], alpha: 0.72 }, // blue 450
-  { mmh: 2, rgb: [57, 135, 229], alpha: 0.8 }, // blue 400
-  { mmh: 4, rgb: [85, 152, 231], alpha: 0.86 }, // blue 350
-  { mmh: 8, rgb: [134, 182, 239], alpha: 0.9 }, // blue 250
-  { mmh: 16, rgb: [183, 211, 246], alpha: 0.93 }, // blue 150
-  { mmh: 32, rgb: [205, 226, 251], alpha: 0.95 }, // blue 100
-  { mmh: 64, rgb: [234, 244, 255], alpha: 0.97 }, // beyond 100
+  { mmh: 0.05, rgb: [28, 92, 171], alpha: 0.5 }, // blue 550
+  { mmh: 0.2, rgb: [37, 106, 191], alpha: 0.62 }, // blue 500
+  { mmh: 0.5, rgb: [42, 120, 214], alpha: 0.72 }, // blue 450
+  { mmh: 1, rgb: [57, 135, 229], alpha: 0.79 }, // blue 400
+  { mmh: 2, rgb: [85, 152, 231], alpha: 0.85 }, // blue 350
+  { mmh: 4, rgb: [109, 167, 236], alpha: 0.88 }, // blue 300
+  { mmh: 8, rgb: [134, 182, 239], alpha: 0.91 }, // blue 250
+  { mmh: 16, rgb: [158, 197, 244], alpha: 0.93 }, // blue 200
+  { mmh: 32, rgb: [205, 226, 251], alpha: 0.96 }, // blue 100
+  { mmh: 64, rgb: [234, 244, 255], alpha: 0.98 }, // beyond 100
 ];
 
 /** Legend bands, labelled by the interval they cover. */

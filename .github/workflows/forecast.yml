@@ -5,10 +5,17 @@ name: Build and deploy forecast
 # run, 21:30 UTC the 12z run. `fetch.latest_run` resolves the newest *complete* run
 # rather than trusting the clock, so a late dissemination degrades to republishing the
 # previous run instead of failing.
+# GitHub queues scheduled workflows behind on-demand jobs and routinely runs them late
+# — the 21:30 UTC run fired 4.5 hours behind on 2026-11-12. Each cycle therefore gets
+# a second attempt two hours later. A catch-up run that finds the same forecast simply
+# republishes identical content, which is harmless, and Actions minutes are free on a
+# public repository.
 on:
   schedule:
-    - cron: "30 9 * * *"
-    - cron: "30 21 * * *"
+    - cron: "30 9 * * *" # 00z run, published ~07-09 UTC
+    - cron: "30 11 * * *" # catch-up
+    - cron: "30 21 * * *" # 12z run, published ~19-21 UTC
+    - cron: "30 23 * * *" # catch-up
   workflow_dispatch:
   push:
     branches: [main]

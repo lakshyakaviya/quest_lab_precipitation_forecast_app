@@ -12,6 +12,8 @@ interface Props {
   onFrame: (frame: number) => void;
   onTogglePlay: () => void;
   onSpeed: (speed: Speed) => void;
+  /** The present moment, so elapsed forecast steps can be marked as past. */
+  now: Date;
   /** So the app can reserve this bar's height when it is fixed to the bottom. */
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -21,6 +23,7 @@ export function TimeScrubber({
   frame,
   playing,
   speed,
+  now,
   onFrame,
   onTogglePlay,
   onSpeed,
@@ -29,6 +32,12 @@ export function TimeScrubber({
   const meta = cube.meta.frames[frame]!;
   const validAt = cube.validTimes[frame]!;
   const last = cube.nFrames - 1;
+  const isPast = cube.isPast(frame, now);
+
+  // How much of the track has already happened. The run is published hours after its
+  // nominal time, so this is routinely a fifth of the track or more.
+  const nowFrame = cube.frameAtTime(now);
+  const pastPercent = Math.max(0, Math.min(100, (nowFrame / last) * 100));
 
   // A tick at each IST midnight, so the track reads as days rather than step numbers.
   const IST_OFFSET_MS = 5.5 * 3_600_000;
@@ -51,7 +60,10 @@ export function TimeScrubber({
 
       <div className="scrubber__track">
         <div className="scrubber__labels">
-          <span className="scrubber__valid">{formatIst(validAt)} IST</span>
+          <span className="scrubber__valid">
+            {formatIst(validAt)} IST
+            {isPast && <span className="scrubber__past-tag">already happened</span>}
+          </span>
           <span className="scrubber__lead">
             {leadTime(meta.step_end)} · {meta.hours} h accumulation ·{" "}
             {formatUtc(validAt)}
@@ -59,6 +71,10 @@ export function TimeScrubber({
         </div>
         <div className="scrubber__slider">
           <div className="scrubber__ticks" aria-hidden="true">
+            <span
+              className="scrubber__past"
+              style={{ width: `${pastPercent}%` }}
+            />
             {dayTicks.map((i) => (
               <span
                 key={i}
@@ -66,6 +82,10 @@ export function TimeScrubber({
                 style={{ left: `${(i / last) * 100}%` }}
               />
             ))}
+            <span
+              className="scrubber__nowmark"
+              style={{ left: `${pastPercent}%` }}
+            />
           </div>
           <input
             type="range"

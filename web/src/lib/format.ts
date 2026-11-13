@@ -69,10 +69,20 @@ export function coords(lat: number, lon: number): string {
 /** "T+36h" style lead-time label. */
 export const leadTime = (hours: number) => `T+${hours}h`;
 
-/** A human gap between two instants, e.g. "in 18 h" or "in 2 days". */
-export function relativeFromRun(runTime: Date, target: Date): string {
-  const hours = Math.round((target.getTime() - runTime.getTime()) / 3_600_000);
-  if (hours < 1) return "now";
+/**
+ * A human gap between now and an instant, e.g. "in 18 h", "in 2 days", "3 h ago".
+ *
+ * This must be measured from the present, not from the forecast run. The run can be
+ * many hours old by the time the page is opened, and anchoring to it produced
+ * statements like "rain starts in 12 h" pointing at a time earlier the same morning.
+ */
+export function relativeTo(target: Date, now: Date = new Date()): string {
+  const minutes = Math.round((target.getTime() - now.getTime()) / 60_000);
+  if (minutes <= -60 * 24) return `${Math.round(-minutes / (60 * 24))} days ago`;
+  if (minutes <= -60) return `${Math.round(-minutes / 60)} h ago`;
+  if (minutes < 0) return "just now";
+  if (minutes < 60) return "within the hour";
+  const hours = Math.round(minutes / 60);
   if (hours < 48) return `in ${hours} h`;
   return `in ${Math.round(hours / 24)} days`;
 }

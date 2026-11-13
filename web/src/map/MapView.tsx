@@ -21,10 +21,14 @@ interface Props {
   onSelect: (point: SelectedPoint) => void;
 }
 
-/** Mainland India plus enough sea to see systems approaching. */
+/**
+ * The whole country in frame: Kanyakumari and Sri Lanka at the bottom, Kashmir at the
+ * top, the Northeast at the right. The latitude span is the binding one, so it is set
+ * generously — an earlier, tighter box let a landscape viewport crop South India away.
+ */
 const INITIAL_BOUNDS: [[number, number], [number, number]] = [
-  [67, 6],
-  [98, 37],
+  [67, 5.5],
+  [98, 36.5],
 ];
 
 /**
