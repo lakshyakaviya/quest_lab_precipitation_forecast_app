@@ -7,6 +7,7 @@ import {
   formatIstDay,
   leadTime,
   mm,
+  mmValue,
   rate as fmtRate,
   relativeTo,
 } from "../lib/format";
@@ -228,8 +229,10 @@ export function PointPanel({
 
 /** One plain sentence on whether the two forecasts tell the same story here. */
 function Agreement({ physics, ai }: { physics: PointSeries; ai: PointSeries }) {
-  const a = physics.remainingTotal;
-  const b = ai.remainingTotal;
+  // Rounded first, so the stated difference always equals the difference of the two
+  // numbers shown above it. Using the raw totals made 149 and 49 read as "+99".
+  const a = mmValue(physics.remainingTotal);
+  const b = mmValue(ai.remainingTotal);
   const diff = a - b;
   const scale = Math.max(a, b);
 

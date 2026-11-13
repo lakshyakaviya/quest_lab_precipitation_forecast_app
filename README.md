@@ -199,6 +199,12 @@ each is now covered by a test:
 - **Deterministic, not probabilistic.** This is the single IFS HRES forecast, so it says
   what one model run expects, not how likely it is. Rain beyond about day 5 should be
   read as a pattern, not a schedule. Ensemble probabilities are the natural next step.
+- **It is precipitation, not rain.** ECMWF's `tp` is *total* precipitation, so over the
+  Himalaya, Kashmir and high Ladakh — especially in winter — much of what the map shows
+  is snow, reported as the depth of water it would melt into. A 10 mm signal over
+  Srinagar is roughly 10 cm of snow, not 10 mm of rain. The app says "rainfall"
+  throughout because that is what it means almost everywhere in the domain, but the
+  distinction matters in the north.
 - **Grid-cell averages.** Each value is the mean over a ~28 km cell, so it will
   understate intense, small convective cells and does not resolve terrain within a cell.
   Values at a point are the cell containing it, not an interpolation.

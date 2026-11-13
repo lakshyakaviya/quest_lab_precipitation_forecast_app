@@ -71,6 +71,10 @@ jobs:
         working-directory: web
         run: npm ci
 
+      - name: Typecheck and run front-end assertions
+        working-directory: web
+        run: npm run check
+
       - name: Build the web app
         working-directory: web
         run: npm run build

@@ -36,7 +36,7 @@ export function TimeScrubber({
 
   // How much of the track has already happened. The run is published hours after its
   // nominal time, so this is routinely a fifth of the track or more.
-  const nowFrame = cube.frameAtTime(now);
+  const nowFrame = cube.frameNearestTime(now);
   const pastPercent = Math.max(0, Math.min(100, (nowFrame / last) * 100));
 
   // A tick at each IST midnight, so the track reads as days rather than step numbers.

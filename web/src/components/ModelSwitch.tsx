@@ -93,6 +93,12 @@ export function ModelSwitch({ mode, comparison, onMode }: Props) {
               </div>
             </dl>
           )}
+          <p>
+            <strong>This is total precipitation, not just rain.</strong> Over the
+            Himalaya and Kashmir in winter most of it falls as snow, shown here as the
+            depth of water it would melt into — so 10 mm over Srinagar is roughly 10 cm
+            of snow, not 10 mm of rain.
+          </p>
           {comparison && (
             <p className="about__note">
               {comparison.aligned

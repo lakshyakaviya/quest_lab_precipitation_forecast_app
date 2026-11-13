@@ -36,8 +36,9 @@ export default function App() {
       .then(({ primary, comparison: cmp }) => {
         setCube(primary);
         setComparison(cmp);
-        // Open on the present, not on the start of a forecast that is partly history.
-        setFrame(primary.frameAtTime(new Date()));
+        // Open on the frame closest to the present, not on the start of a forecast
+        // that is already partly history.
+        setFrame(primary.frameNearestTime(new Date()));
       })
       .catch((e: unknown) => {
         if (controller.signal.aborted) return;
@@ -115,14 +116,16 @@ export default function App() {
     if (!cube || !selected) return null;
     // Forward-looking figures start at the frame covering the present moment.
     return cube.seriesAt(selected.lat, selected.lon, {
-      fromFrame: cube.frameAtTime(now),
+      fromFrame: cube.frameNearestTime(now),
     });
   }, [cube, selected, now]);
 
   const aiSeries: PointSeries | null = useMemo(() => {
     if (!comparison || !selected) return null;
+    // Each model is anchored on its own frame nearest the present: they have
+    // different interval lengths, so the same instant is a different frame index.
     return comparison.ai.seriesAt(selected.lat, selected.lon, {
-      fromFrame: comparison.ai.frameAtTime(now),
+      fromFrame: comparison.ai.frameNearestTime(now),
     });
   }, [comparison, selected, now]);
 

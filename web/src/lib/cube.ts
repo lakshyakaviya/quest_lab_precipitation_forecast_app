@@ -116,24 +116,41 @@ export class Cube {
   }
 
   /**
-   * The frame whose interval contains `when`, clamped to the forecast.
+   * The frame whose valid time is closest to `when` — the single "now" reference.
    *
-   * A run is published 7-9 hours after its nominal time and is then the newest for
+   * A run is published 7-9 hours after its nominal time and stays the newest for
    * another 12, so by the time anyone opens the page a good part of the forecast is
-   * already in the past. Everything forward-looking is measured from here.
+   * already history. This frame is where the timeline opens, where the past/future
+   * boundary is drawn, and where forward-looking statistics start.
+   *
+   * Nearest rather than "the interval containing now": at 09:10, with frames ending
+   * 09:00 and 12:00, the 09:00 picture is ten minutes old while the 12:00 one is
+   * nearly three hours away. Using the containing interval also meant the frame the
+   * app opened on was frequently labelled "already happened", since its interval had
+   * just closed.
    */
-  frameAtTime(when: Date): number {
+  frameNearestTime(when: Date): number {
     const lead = this.leadHoursAt(when);
-    if (lead <= this.stepEnd[0]!) return 0;
+    let best = 0;
+    let bestGap = Infinity;
     for (let f = 0; f < this.nFrames; f++) {
-      if (lead <= this.stepEnd[f]!) return f;
+      const gap = Math.abs(this.stepEnd[f]! - lead);
+      if (gap < bestGap) {
+        bestGap = gap;
+        best = f;
+      }
     }
-    return this.nFrames - 1;
+    return best;
   }
 
-  /** True when this frame's interval has entirely elapsed. */
+  /**
+   * True when this frame sits before the one nearest the present.
+   *
+   * Defined against `frameNearestTime` rather than raw elapsed time so that the frame
+   * the app opens on is never itself marked as past.
+   */
   isPast(frame: number, now: Date): boolean {
-    return this.stepEnd[frame]! <= this.leadHoursAt(now);
+    return frame < this.frameNearestTime(now);
   }
 
   /** Nearest grid cell to a geographic position, or null if outside the domain. */

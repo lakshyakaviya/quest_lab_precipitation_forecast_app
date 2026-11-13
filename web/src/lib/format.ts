@@ -53,6 +53,18 @@ export function mm(value: number): string {
   return Math.round(value).toLocaleString("en-IN");
 }
 
+/**
+ * The numeric value `mm()` will display.
+ *
+ * Arithmetic shown next to rounded figures has to be done on those same rounded
+ * figures, or the reader sees "149 mm" and "49 mm" annotated "+99". Differences are
+ * therefore computed from `mmValue`, not from the raw totals.
+ */
+export function mmValue(value: number): number {
+  if (value <= 0) return 0;
+  return value < 10 ? Math.round(value * 10) / 10 : Math.round(value);
+}
+
 /** Rain rate in mm/h. */
 export function rate(value: number): string {
   if (value <= 0) return "0";
