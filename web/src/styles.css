@@ -221,6 +221,14 @@ a {
   color: var(--text-muted);
 }
 
+/*
+ * A left-side label puts the text before the dot, so the dot still lands exactly on
+ * the coordinate while the name hangs westward into clear space.
+ */
+.place--left {
+  flex-direction: row-reverse;
+}
+
 .pin {
   width: 14px;
   height: 14px;

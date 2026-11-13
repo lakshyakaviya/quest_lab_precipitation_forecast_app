@@ -15,6 +15,15 @@ export interface Place {
   lat: number;
   lon: number;
   rank: 1 | 2 | 3;
+  /**
+   * Which side of the dot the label sits on. Default "right".
+   *
+   * Labels are placed by hand rather than by a collision solver: there are only a
+   * dozen on screen, they never move relative to each other, and a solver that runs
+   * on every pan is a lot of machinery for a fixed problem. "left" is used where a
+   * westward neighbour's label would otherwise run into this city's dot.
+   */
+  labelSide?: "left" | "right";
 }
 
 export const PLACES: Place[] = [
@@ -22,7 +31,9 @@ export const PLACES: Place[] = [
   { name: "Mumbai", state: "Maharashtra", lat: 19.08, lon: 72.88, rank: 1 },
   { name: "Kolkata", state: "West Bengal", lat: 22.57, lon: 88.36, rank: 1 },
   { name: "Chennai", state: "Tamil Nadu", lat: 13.08, lon: 80.27, rank: 1 },
-  { name: "Bengaluru", state: "Karnataka", lat: 12.97, lon: 77.59, rank: 1 },
+  // Bengaluru sits ~2.7 deg west of Chennai at the same latitude, so a right-hand
+  // label runs straight through Chennai's dot at the default zoom.
+  { name: "Bengaluru", state: "Karnataka", lat: 12.97, lon: 77.59, rank: 1, labelSide: "left" },
   { name: "Hyderabad", state: "Telangana", lat: 17.39, lon: 78.49, rank: 1 },
 
   { name: "Ahmedabad", state: "Gujarat", lat: 23.03, lon: 72.58, rank: 2 },

@@ -7,6 +7,12 @@ Live: **https://lakshyakaviya.github.io/quest_lab_precipitation_forecast_app/**
 Built for the QUEST Lab Full Stack AI pre-doctoral application by Lakshya Kaviya,
 November 2026.
 
+![Monsoon Lens: scrubbing ten days of forecast rainfall over India, opening the board of places the two models most disagree about, swiping the physics forecast against the AI forecast, and viewing the signed difference between them](docs/media/monsoon-lens.gif)
+
+*Recorded from the deployed app on the 2026-11-13 00Z run. The point it settles on is
+Chennai, where the AI model expects 179 mm and the physics model 13 mm — the case
+examined below.*
+
 ---
 
 ## What it does
@@ -39,21 +45,80 @@ for a rainfall timeline, and put the two forecasts against each other.
 
 AI weather models are known to produce smoother, less extreme precipitation than
 physics models, and the app makes that visible rather than asserting it. On the
-2026-11-12 12Z run over India:
+2026-11-13 00Z run over India:
 
 | | IFS HRES (physics) | AIFS Single (AI) |
 |---|---|---|
-| Peak rate | 64.5 mm/h | 13.0 mm/h |
+| Peak rate | 66.1 mm/h | 11.5 mm/h |
 | Share of cells raining | 14% | 19% |
 
-The AI model spreads rain over a wider area at lower intensity. In the swipe view the
-physics side is granular and speckled while the AI side is made of large smooth blobs.
+Both figures are **recomputed for every run** and shown live in the app's "What is this?"
+panel; they are read from each run's `meta.json`, never hardcoded. The two behave quite
+differently run to run — the peak is a single cell out of 1.27 million and moves by a few
+mm/h each cycle, while the wet area averages over the whole cube and barely moves, which
+is why the 12Z and 00Z runs both round to 14% and 19% even though their peaks differ.
+The direction is the stable part: the AI model spreads rain over a wider area at lower
+intensity. In the swipe view the physics side is granular and speckled while the AI side
+is made of large smooth blobs.
 
-The disagreement can be total rather than cosmetic. On the 2026-11-12 12Z run the
-physics model expected **20 mm** over Bhubaneswar in the next five days and the AI model
-expected **0 mm**. The "Models differ" board exists to surface cases like that.
+#### A worked case: the Bay of Bengal system heading for the Andhra coast
 
-Neither is ground truth; this app does not verify either against observations.
+The 2026-11-13 00Z run contains the clearest example of why the comparison is worth
+building. Both models carry an organised system that forms in the southern Bay of Bengal
+around 14 November and tracks north-west for the next five days. They disagree about
+almost everything that matters about it.
+
+Tracking the wettest cell in a box over the Bay (8–22°N, 80–92°E) at matching valid
+times:
+
+| Valid (UTC) | IFS HRES core | AIFS Single core | Separation |
+|---|---|---|---|
+| 15 Nov 00Z | 8.75°N 84.00°E, 23.2 mm/h | 8.25°N 83.25°E, 8.4 mm/h | ~100 km |
+| 16 Nov 06Z | 12.50°N 84.75°E, **43.9 mm/h** | 11.75°N 83.25°E, 6.9 mm/h | ~180 km |
+| 18 Nov 12Z | 14.75°N 84.25°E, 37.9 mm/h | 12.50°N 82.25°E, 9.1 mm/h | ~330 km |
+| 19 Nov 18Z | 17.00°N 82.50°E, **40.1 mm/h** | 14.75°N 80.00°E, 6.4 mm/h | ~370 km |
+
+The physics model drives a tight, intensifying core up the middle of the Bay and brings it
+onto the coast near **Visakhapatnam** around 19–20 November. The AI model keeps a weak,
+broad smear that drifts west and comes ashore near **Nellore and Chennai** instead. By day
+six the two cores are **370 km apart** and differ **six-fold** in peak intensity.
+
+Where that lands is close to a mirror image. Totals over the whole forecast
+(T+0h → T+240h) at the coastal cells:
+
+| | IFS HRES (physics) | AIFS Single (AI) |
+|---|---|---|
+| Visakhapatnam (17.69°N, 83.22°E) | **181 mm** | 42 mm |
+| Nellore (14.44°N, 79.99°E) | 7 mm | **179 mm** |
+| Chennai (13.08°N, 80.27°E) | 14 mm | **180 mm** |
+
+Each model puts about 180 mm on the coast. They disagree by roughly **500–600 km** about
+*which* coast — and so about which few million people should be paying attention. Both
+started from the **same analysis at the same hour**; the divergence is the models, not
+their initial conditions. That is the whole argument for showing them side by side rather
+than picking one and presenting it as the forecast.
+
+Four things this example does **not** show, which matter as much as what it does:
+
+- **It is a precipitation signature, not a confirmed cyclone.** This app ingests `tp`
+  alone — no wind, no mean sea-level pressure — so it can show an organised, slowly
+  tracking rainfall core consistent with a tropical system, and nothing more. Calling it a
+  cyclone would be reading more into one field than it carries. India's official
+  designations come from the IMD, not from here.
+- **The divergence sits at day 6–7 lead time**, where deterministic forecasts have little
+  skill and tracks routinely shift by hundreds of kilometres between runs. Both forecasts
+  will have changed by the time you read this.
+- **The five-day board only catches the edge of it.** The "Models differ" board covers
+  the next five days, and inside that window Visakhapatnam is at 0 mm in *both* models —
+  the landfall is at day 6–7. The board does surface the system, but as Chennai at
+  2.2 vs 19 mm, which is the first few hours of a 180 mm disagreement. Reading the
+  magnitude of this case needs the map and the point timeline, not the rankings.
+- **Neither model is ground truth.** This app never verifies either against observations,
+  so it can show *that* they disagree, never which one is right.
+
+Earlier runs show the same pattern at shorter range: on the 2026-11-12 12Z run the physics
+model expected **20 mm** over Bhubaneswar in the next five days where the AI model expected
+**0 mm**. The "Models differ" board exists to surface cases like that one.
 
 ## How it works
 
@@ -171,24 +236,41 @@ history never accumulates binaries.
 GRIB packing tolerance, the cube/metadata contract, units, and timezone handling (45 tests, no
 network needed). Beyond that, two checks confirm the output means what it claims:
 
-**Independent cross-check.** Daily totals compared against Open-Meteo's ECMWF IFS feed —
-same source model, entirely separate pipeline. A units error would show as a 1000×
-factor, the interval bug as 2×:
+**Independent cross-check.** Ten-day totals compared against Open-Meteo's ECMWF IFS feed
+— same source model, entirely separate pipeline. A units error would show as a 1000×
+factor, the interval bug as 2×. On the 2026-11-13 00Z run:
 
-| Thiruvananthapuram (8.52 N, 76.94 E) | 13 Nov | 14 Nov | 15 Nov | 16 Nov | 17 Nov | 18 Nov | Total |
-|---|---|---|---|---|---|---|---|
-| This pipeline (mm) | 5.4 | 2.2 | 2.0 | 1.0 | 0.2 | 4.2 | **14.9** |
-| Open-Meteo ECMWF (mm) | 4.9 | 2.1 | 2.1 | 1.2 | 0.3 | 4.2 | **14.8** |
+| Point | This pipeline | Open-Meteo ECMWF | Difference |
+|---|---|---|---|
+| Thiruvananthapuram (8.52 N, 76.94 E) | 32.96 mm | 31.80 mm | −3.5% |
+| Kochi (9.93 N, 76.27 E) | 23.25 mm | 23.40 mm | +0.6% |
+| Chennai (13.08 N, 80.27 E) | 13.55 mm | 15.40 mm | +13.7% |
 
-(IFS 2026-11-12 12Z run. Chennai agreed to 1.5 vs 1.2 mm; Kolkata was dry in both.)
+**Days are UTC days** on both sides (`timezone=GMT`), not Indian calendar days — an IST
+day starts at 18:30Z the evening before, and conflating the two is how day-shift errors
+get in. Open-Meteo serves whichever ECMWF cycle is current, which was 06Z when this was
+measured against our 00Z deployment, and it interpolates to the requested coordinate
+while this pipeline returns the containing 0.25° cell. So this establishes the absence of
+a 1000× or 2× error; it is not agreement to the last tenth, and Chennai — on a sharp
+coastal gradient — shows the limit. [docs/METHODS.md](docs/METHODS.md) records the
+earlier 12Z day-by-day comparison, why the printed columns there do not add exactly to
+the printed total (each is rounded independently), and why agreement on totals of 1–2 mm
+is weak evidence.
 
 **Seasonal plausibility.** Mid-November in India is the *northeast* monsoon, so the rain
-should sit over Tamil Nadu, coastal Andhra, Kerala and Sri Lanka, with the Thar desert
-and the Himalaya dry. The 10-day mean south of 15 °N came out **12× wetter** than north
-of 28 °N, with Delhi, Mumbai and Jaisalmer at or near zero. A window extracted from the
-wrong longitudes would fail this immediately.
+should sit over Tamil Nadu, coastal Andhra, Kerala and Sri Lanka, while the northern
+plains and the Thar desert stay dry. The 10-day mean south of 15 °N came out **21× wetter**
+than north of 28 °N on the 2026-11-13 00Z run (12× on 12 Nov 12Z), with Delhi and Mumbai
+at 0.0 mm and Jaisalmer at 2.6 mm. A window extracted from the wrong longitudes would
+fail this immediately.
 
-### Three things that were not what the documentation implied
+The far north is *not* uniformly dry, and the check is written so it does not pretend
+otherwise: the northwest desert belt averaged 4.1 mm over ten days while the western
+Himalaya averaged 6.4 mm with individual cells reaching 70.8 mm, which is what a passing
+western disturbance looks like. Srinagar read 16.4 mm — almost all of it **snow**, as the
+limitations below explain.
+
+### Four things that were not what the documentation implied
 
 Each was found by checking against live data rather than trusting an assumption, and
 each is now covered by a test:
@@ -206,16 +288,20 @@ each is now covered by a test:
    a naive datetime outright. (The fix then broke CI, because the client compares the
    requested date against a naive constant internally; the local GRIB cache had hidden
    it by skipping the download entirely.)
-4. **AIFS publishes `tp` in kg m⁻², not metres.** Measured ratio of AIFS to IFS
-   accumulated `tp` at T+24h was 949.7 — a thousandfold unit difference, not a physical
-   one. Units are read from each file and converted, and an unknown unit is an error
-   rather than a guess.
+4. **AIFS publishes `tp` in kg m⁻², not metres.** The measured ratio of AIFS to IFS
+   accumulated `tp` at T+24h, in their published units, was 949.7 — which is a **≈1000×
+   unit factor** with a **genuine ~5% model difference** riding on it, not a clean 1000×.
+   Divide the units out and AIFS carries about 5% less total water than IFS over the
+   domain, the same smoothing tendency that shows up far more starkly in peak intensity.
+   Units are read from each file and converted, and an unknown unit is an error rather
+   than a guess.
 
 ## Known limitations
 
-- **Deterministic, not probabilistic.** This is the single IFS HRES forecast, so it says
-  what one model run expects, not how likely it is. Rain beyond about day 5 should be
-  read as a pattern, not a schedule. Ensemble probabilities are the natural next step.
+- **Deterministic, not probabilistic.** Both models are single deterministic runs, so
+  each says what one forecast expects, not how likely it is. Rain beyond about day 5
+  should be read as a pattern, not a schedule — the Visakhapatnam case above is a day 6–7
+  signal and will move between runs. Ensemble probabilities are the natural next step.
 - **It is precipitation, not rain.** ECMWF's `tp` is *total* precipitation, so over the
   Himalaya, Kashmir and high Ladakh — especially in winter — much of what the map shows
   is snow, reported as the depth of water it would melt into. A 10 mm signal over

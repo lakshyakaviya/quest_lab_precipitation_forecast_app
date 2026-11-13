@@ -46,9 +46,9 @@ const MAX_BOUNDS: [[number, number], [number, number]] = [
   [basemapBbox[2], basemapBbox[3]],
 ];
 
-function placeElement(name: string, rank: number): HTMLElement {
+function placeElement(name: string, rank: number, side: "left" | "right"): HTMLElement {
   const el = document.createElement("div");
-  el.className = `place place--r${rank}`;
+  el.className = `place place--r${rank} place--${side}`;
   el.innerHTML = `<span class="place__dot"></span><span class="place__name">${name}</span>`;
   return el;
 }
@@ -175,7 +175,13 @@ export function MapView({
       surface.attach(map);
       repaint();
       for (const place of LABELLED_PLACES) {
-        new Marker({ element: placeElement(place.name, place.rank), anchor: "left" })
+        // A "left" label hangs the text to the west of the dot, so the marker's own
+        // right edge is what gets pinned to the coordinate.
+        const side = place.labelSide ?? "right";
+        new Marker({
+          element: placeElement(place.name, place.rank, side),
+          anchor: side === "left" ? "right" : "left",
+        })
           .setLngLat([place.lon, place.lat])
           .addTo(map);
       }

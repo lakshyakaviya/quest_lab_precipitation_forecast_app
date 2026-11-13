@@ -49,11 +49,22 @@ arrays and asserts that the corners land on 65/100°E and 5/40°N.
 | IFS HRES | `m` | × 1000 |
 | AIFS Single | `kg m**-2` | × 1 |
 
-1 kg m⁻² of water is 1 mm of depth. The measured ratio of AIFS to IFS accumulated `tp`
-at T+24h on the 2026-11-12 12Z run was **949.7** — a unit difference, not a physical
-one. Units are read from each file and converted in `decode.decode_window`; an
-unrecognised unit raises rather than being guessed. Everything downstream works in
-millimetres.
+1 kg m⁻² of water is 1 mm of depth. The measured ratio of AIFS `tp` to IFS `tp` *in
+their published units*, averaged over the domain at T+24h on the 2026-11-12 12Z run, was
+**949.7**. That number is two separate things multiplied together, and it is worth
+separating them:
+
+- **×1000 from units**, which is the whole reason the ratio is near a thousand at all.
+  Treating an AIFS field as metres would overstate rainfall thousandfold.
+- **×0.9497 from the models themselves.** Once the unit factor is divided out, AIFS
+  carries about **5% less** total water than IFS over India at that lead time. That
+  residual is a genuine model difference, not a rounding artefact — it is the same
+  smoothing tendency that shows up far more dramatically in peak intensity (§6).
+
+So the right reading is "a thousandfold unit factor, with a few per cent of real
+disagreement riding on top", not "a clean 1000×". Units are read from each file and
+converted in `decode.decode_window`; an unrecognised unit raises rather than being
+guessed. Everything downstream works in millimetres.
 
 ## 4. De-accumulation
 
@@ -130,6 +141,47 @@ midpoint, so "they agree" reads as no signal.
 Neither model is ground truth, and **this app never verifies either against
 observations**. It can show that two forecasts differ; it cannot say which is right.
 
+### Peak intensity and wet area move at different speeds
+
+The two summary figures in the app's "What is this?" panel behave very differently from
+run to run, which is worth knowing before reading anything into either:
+
+| 2026-11-13 00Z | IFS HRES | AIFS Single |
+|---|---|---|
+| Peak rate | 66.08 mm/h | 11.54 mm/h |
+| Area raining (> 0.1 mm/h, all frames) | 14.23% | 18.73% |
+
+The 2026-11-12 12Z run gave peaks of 64.44 and 13.00 mm/h, and wet areas that rounded to
+the same 14% and 19% as above. (That run's `meta.json` has since been replaced by the
+next deployment — only the rounded figures were recorded at the time, so the exact
+decimals are no longer recoverable.) **The peaks moved by one to two mm/h while the areas
+did not move enough to change a whole percentage point** — a peak is one cell out of 1.27
+million and is set by whatever the single most convective moment in the forecast happens
+to be, whereas the wet area averages over the entire cube and is therefore far more
+stable. Two consecutive runs showing the same 14% and 19% is a real property of the data,
+not a stale figure.
+
+Both numbers are **recomputed for every run** in `transform.check_rates`
+(`wet_fraction = (rate > 0.1 mm/h).mean()`), stored in `meta.json` under `stats`, and
+read live by the UI from `comparison.physics.meta.stats.wet_fraction`. Nothing in the
+app is hardcoded. Figures quoted in prose *in this file and in the README* are
+necessarily snapshots and are labelled with the run they came from.
+
+The direction of the difference is the part that matters and it is consistent across
+runs: the AI model wets a **wider area at a lower peak**, which is the smoothing
+tendency AIFS is known for, and the same tendency that showed up as the residual 5% in
+§3.
+
+The sharpest instance found so far is worked through in the README: on the 2026-11-13 00Z
+run both models carry one organised system across the Bay of Bengal, but by day six their
+cores are **370 km apart** and differ **six-fold** in peak rate. Each then deposits about
+180 mm on the east coast — IFS at Visakhapatnam (181 mm, against the AI's 42 mm), AIFS
+500–600 km south at Nellore and Chennai (179 and 180 mm, against the physics model's 7 and
+14 mm). Two caveats travel with that example: `tp` alone cannot establish that such a
+feature *is* a cyclone, since no wind or pressure field is ingested, and a day 6–7
+divergence says as much about deterministic skill at that range as it does about the two
+models.
+
 ## 7. "Now"
 
 A run is already several hours old when published and stays newest for another twelve,
@@ -148,12 +200,48 @@ relative to the present, not to the run.
 Daily totals against Open-Meteo's ECMWF IFS feed — same source model, entirely separate
 processing chain. A units error would appear as a 1000× factor, the interval bug as 2×.
 
+**Days are UTC days** (00:00–24:00Z) on both sides, requested from Open-Meteo with
+`timezone=GMT`. They are *not* Indian calendar days: an IST day runs from 18:30Z the
+previous evening, so "13 Nov" here is not the 13 Nov a reader in India experiences, and
+the two partition rainfall differently. UTC is used because it is the convention the
+GRIB steps are already in, and mixing the two is how day-shift errors get in.
+
 | Thiruvananthapuram (8.52 N, 76.94 E) | 13 Nov | 14 Nov | 15 Nov | 16 Nov | 17 Nov | 18 Nov | Total |
 |---|---|---|---|---|---|---|---|
-| This pipeline (mm) | 5.4 | 2.2 | 2.0 | 1.0 | 0.2 | 4.2 | **14.9** |
-| Open-Meteo ECMWF (mm) | 4.9 | 2.1 | 2.1 | 1.2 | 0.3 | 4.2 | **14.8** |
+| This pipeline (mm) | 5.4 | 2.2 | 2.0 | 1.0 | 0.2 | 4.2 | 14.9 |
+| Open-Meteo ECMWF (mm) | 4.9 | 2.1 | 2.1 | 1.2 | 0.3 | 4.2 | 14.8 |
 
-IFS 2026-11-12 12Z run. Chennai agreed to 1.5 vs 1.2 mm; Kolkata was dry in both.
+IFS 2026-11-12 12Z run.
+
+**On the arithmetic:** each column is rounded to 0.1 mm independently and each total is
+the sum of the *unrounded* daily values, so the printed columns need not add up to the
+printed total. Here the pipeline columns sum to 15.0 against a stated 14.9 — the gap is
+accumulated rounding across six columns, not a missing day. The same effect is visible
+on the current run, where Chennai's ten daily values sum to 13.5 as printed and 13.55
+unrounded, which prints as 13.6. Reproducible figures are therefore quoted unrounded
+below.
+
+Chennai on the 12Z run came out at **1.5 mm against Open-Meteo's 1.2 mm**. On totals that
+small, agreement to within a few tenths is weak evidence: the two differ by 25% in
+relative terms, and either could round to the other with a small change. It rules out a
+unit or interval error, which is all it was asked to do — it is not a demonstration that
+the two pipelines agree closely. Kolkata was dry in both, which is a still weaker test.
+
+**Re-run on the 2026-11-13 00Z run** (ten-day totals, unrounded both sides):
+
+| Point | This pipeline | Open-Meteo ECMWF | Difference |
+|---|---|---|---|
+| Thiruvananthapuram (8.52 N, 76.94 E) | 32.96 mm | 31.80 mm | −3.5% |
+| Kochi (9.93 N, 76.27 E) | 23.25 mm | 23.40 mm | +0.6% |
+| Chennai (13.08 N, 80.27 E) | 13.55 mm | 15.40 mm | +13.7% |
+
+Two caveats keep this honest. Open-Meteo serves **whichever ECMWF cycle is current**,
+which was the 06Z run by the time this was measured while the app had deployed 00Z, so
+day-level rows legitimately differ by a forecast cycle and only the ten-day totals are
+comparable. And Open-Meteo interpolates to the requested coordinate while this pipeline
+returns the containing 0.25° cell, so the two are not sampling identical areas — enough
+to explain Chennai, which sits on a sharp coastal gradient. What the check establishes is
+the absence of a 1000× or 2× error, not agreement to the last tenth.
 
 ### The interval divisor
 
@@ -172,9 +260,32 @@ divisor would have made them higher.
 ### Seasonal plausibility
 
 Mid-November in India is the *northeast* monsoon: rain over Tamil Nadu, coastal Andhra,
-Kerala and Sri Lanka, with the Thar desert and the Himalaya dry. The 10-day mean south
-of 15°N came out **12× wetter** than north of 28°N, with Delhi, Mumbai and Jaisalmer at
-or near zero. A window extracted from the wrong longitudes fails this immediately.
+Kerala and Sri Lanka, while the northern plains and the Thar desert stay dry. The test is
+that **the far south is an order of magnitude wetter than the far north**, and that the
+dry areas are the ones that should be dry.
+
+On the 2026-11-13 00Z run the 10-day mean accumulation was **71.7 mm south of 15°N
+against 3.4 mm north of 28°N — a ratio of 21×**. The 2026-11-12 12Z run gave 12×. The
+ratio is a threshold, not a constant: it moves run to run with where the systems sit, and
+anything from roughly 5× upward passes. A window extracted from the wrong longitudes
+fails it outright, because the eastern Pacific has no such gradient.
+
+**The far north is not uniformly dry, and saying so would contradict the snow caveat.**
+Separating the north makes the picture consistent:
+
+| Region (2026-11-13 00Z) | 10-day mean | Note |
+|---|---|---|
+| Northwest desert belt, 25–40°N / 68–75°E | 4.1 mm | genuinely dry; Jaisalmer 2.6 mm |
+| Western Himalaya, 30–36°N / 74–80°E | 6.4 mm, max **70.8 mm** | the wettest part of the north |
+
+So the dry areas are the plains and the desert — Delhi and Mumbai both at 0.0 mm — while
+the Himalayan arc carries modest means with individual cells well above anything in the
+northwest, which is what a passing western disturbance looks like. Srinagar reads
+**16.4 mm** on this run. Nearly all of that is **snow**, reported as the depth of water it
+would melt into (§ *Known sources of error* and the README's limitations), so roughly
+16 cm of snow rather than 16 mm of rain. "The Himalaya is dry in November" would be both
+wrong and inconsistent with that caveat; the correct statement is that the north is dry
+*except* along the mountains, and what falls there is frozen.
 
 ### Automated
 
