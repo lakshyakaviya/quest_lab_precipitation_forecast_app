@@ -198,6 +198,24 @@ pip install shapely
 python pipeline/tools/build_basemap.py <download_dir> web/src/assets/basemap.json
 ```
 
+Re-recording the demo GIF at the top of this file:
+
+```bash
+pip install playwright pillow
+playwright install chromium
+
+cd web && npm run build          # record the production build, not the dev server
+# serve web/dist/ at /quest_lab_precipitation_forecast_app/ on :4173, then:
+python pipeline/tools/capture_demo.py \
+    http://127.0.0.1:4173/quest_lab_precipitation_forecast_app/ docs/media
+```
+
+The tour is driven through the UI rather than by injecting state, so a clean run also
+exercises the scrubber, both rankings boards, the swipe and the mode switch against real
+data; the script exits non-zero if the page logged an error while recording. The forecast
+changes twice a day, so check what it captured and keep the caption's figures in step
+with it.
+
 ## Deploying
 
 The repository deploys itself to GitHub Pages. Once:
@@ -223,6 +241,7 @@ history never accumulates binaries.
 | `pipeline/src/precipitation/transform.py` | de-accumulation, units, quality gates |
 | `pipeline/src/precipitation/encode.py` | `cube.f16` + `meta.json` contract |
 | `pipeline/tools/build_basemap.py` | one-off Natural Earth → bundled basemap |
+| `pipeline/tools/capture_demo.py` | records the demo GIF by driving the built app |
 | `web/src/lib/cube.ts` | cube decode, point sampling, frame colouring |
 | `web/src/map/RainLayer.ts` | the rain raster surface |
 | `web/src/components/PointPanel.tsx` | point timeline and charts |
