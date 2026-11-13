@@ -7,6 +7,7 @@ under `.cache/grib/`, so repeated local runs do not re-download ~33 MB.
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -80,6 +81,26 @@ def latest_run(model: config.Model) -> datetime:
             step=model.steps[-1],
         )
     )
+
+
+def common_run(models: Sequence[config.Model]) -> datetime:
+    """The newest run that *every* given model has published to its full horizon.
+
+    Comparing a physics forecast against an AI forecast is only meaningful if both
+    start from the same analysis. They do not become available together: AIFS is
+    released as soon as it is produced and runs all four cycles to day 15, while IFS
+    reaches day 15 only at 00z and 12z and lands later. Taking the earliest of the
+    models' latest runs gives the newest cycle they all share.
+    """
+    if not models:
+        raise ValueError("no models given")
+    latest = {m.key: latest_run(m) for m in models}
+    chosen = min(latest.values())
+    for key, when in latest.items():
+        if when != chosen:
+            print(f"[fetch] {key} has {when:%Y-%m-%d %H}Z; aligning all models to "
+                  f"{chosen:%Y-%m-%d %H}Z so the comparison is like for like")
+    return chosen
 
 
 def fetch(

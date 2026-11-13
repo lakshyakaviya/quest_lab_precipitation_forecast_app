@@ -38,10 +38,10 @@ def test_aifs_steps_are_uniformly_six_hourly():
 def test_rate_uses_each_intervals_own_length():
     """1 mm falling in every interval must give 1/3 mm/h then 1/6 mm/h, not a constant."""
     steps = [0, 3, 6, 144, 150, 156]
-    # Cumulative metres: 1 mm (0.001 m) added per interval.
+    # Cumulative millimetres: 1 mm added per interval.
     accum = np.zeros((len(steps), 2, 2), dtype=np.float32)
     for i in range(len(steps)):
-        accum[i] = i * 0.001
+        accum[i] = i * 1.0
 
     rate = transform.deaccumulate(accum, steps).rate_mm_h
 
@@ -54,18 +54,29 @@ def test_rate_uses_each_intervals_own_length():
 def test_constant_divisor_bug_would_be_caught():
     """A 6 h interval must not be reported at the 3 h rate."""
     steps = [0, 3, 150]
-    accum = np.array([[[0.0]], [[0.003]], [[0.009]]], dtype=np.float32)
+    accum = np.array([[[0.0]], [[3.0]], [[9.0]]], dtype=np.float32)
     rate = transform.deaccumulate(accum, steps).rate_mm_h
     # 3 mm over 3 h = 1.0 mm/h; 6 mm over 147 h = 0.0408 mm/h.
     np.testing.assert_allclose(rate[0, 0, 0], 1.0, rtol=1e-5)
     np.testing.assert_allclose(rate[1, 0, 0], 6.0 / 147.0, rtol=1e-5)
 
 
-def test_units_are_converted_from_metres_to_millimetres():
+def test_rate_is_millimetres_per_hour():
+    """Input is already mm (decode normalises IFS metres and AIFS kg m-2)."""
     steps = [0, 1]
-    accum = np.array([[[0.0]], [[0.025]]], dtype=np.float32)  # 25 mm in 1 h
+    accum = np.array([[[0.0]], [[25.0]]], dtype=np.float32)  # 25 mm in 1 h
     rate = transform.deaccumulate(accum, steps).rate_mm_h
     np.testing.assert_allclose(rate[0, 0, 0], 25.0, rtol=1e-5)
+
+
+def test_unit_table_maps_both_models_to_millimetres():
+    """IFS publishes metres; AIFS Single publishes kg m-2, which is already mm.
+
+    Treating an AIFS field as metres overstates rainfall by 1000x. Measured ratio of
+    AIFS to IFS accumulated tp at T+24 on the 2026-11-12 12Z run was 949.7.
+    """
+    assert config.UNITS_TO_MM["m"] == 1000.0
+    assert config.UNITS_TO_MM["kg m**-2"] == 1.0
 
 
 # --------------------------------------------------------------------------------------
@@ -78,10 +89,8 @@ def test_units_are_converted_from_metres_to_millimetres():
 
 def test_one_quantum_decrement_is_clamped_not_rejected():
     steps = [0, 3, 6]
-    dip = config.GRIB_PACKING_QUANTUM_M  # 1.22e-4 m, the real worst case
-    accum = np.array(
-        [[[0.0]], [[0.005]], [[0.005 - dip]]], dtype=np.float64
-    )
+    dip = config.GRIB_PACKING_QUANTUM_MM  # 0.122 mm, the real worst case
+    accum = np.array([[[0.0]], [[5.0]], [[5.0 - dip]]], dtype=np.float64)
     result = transform.deaccumulate(accum, steps)
     assert result.rate_mm_h[1, 0, 0] == 0.0
     assert result.rate_mm_h.min() >= 0.0
@@ -93,19 +102,19 @@ def test_clamping_diagnostics_quantify_the_mass_added():
     steps = [0, 3, 6]
     # 10 mm then a one-quantum dip: clamping adds that quantum back.
     accum = np.array(
-        [[[0.0]], [[0.010]], [[0.010 - config.GRIB_PACKING_QUANTUM_M]]],
+        [[[0.0]], [[10.0]], [[10.0 - config.GRIB_PACKING_QUANTUM_MM]]],
         dtype=np.float64,
     )
     result = transform.deaccumulate(accum, steps)
     assert result.clamped_fraction == pytest.approx(0.5)
     assert result.mass_added_fraction == pytest.approx(
-        config.GRIB_PACKING_QUANTUM_M / 0.010, rel=1e-6
+        config.GRIB_PACKING_QUANTUM_MM / 10.0, rel=1e-6
     )
 
 
 def test_a_clean_field_reports_no_clamping():
     steps = [0, 3, 6]
-    accum = np.array([[[0.0]], [[0.002]], [[0.005]]], dtype=np.float64)
+    accum = np.array([[[0.0]], [[2.0]], [[5.0]]], dtype=np.float64)
     result = transform.deaccumulate(accum, steps)
     assert result.clamped_cells == 0
     assert result.mass_added_fraction == 0.0
@@ -114,15 +123,16 @@ def test_a_clean_field_reports_no_clamping():
 def test_real_decrease_beyond_tolerance_is_an_error():
     """A mis-ordered or mismatched step loses millimetres, not quanta."""
     steps = [0, 3, 6]
-    accum = np.array([[[0.0]], [[0.010]], [[0.004]]], dtype=np.float32)
+    accum = np.array([[[0.0]], [[10.0]], [[4.0]]], dtype=np.float32)
     with pytest.raises(ValueError, match="decreased"):
         transform.deaccumulate(accum, steps)
 
 
 def test_tolerance_sits_between_packing_noise_and_real_faults():
-    q = config.GRIB_PACKING_QUANTUM_M
-    assert config.NEGATIVE_TOLERANCE_M > q, "must absorb one quantum of packing noise"
-    assert config.NEGATIVE_TOLERANCE_M < 1e-3, "must stay below a millimetre"
+    q = config.GRIB_PACKING_QUANTUM_MM
+    # A real run showed a -2 quantum decrement, so one quantum is not enough headroom.
+    assert config.NEGATIVE_TOLERANCE_MM > 2 * q
+    assert config.NEGATIVE_TOLERANCE_MM < 1.0, "must stay below a millimetre"
 
 
 def test_steps_must_start_at_zero():

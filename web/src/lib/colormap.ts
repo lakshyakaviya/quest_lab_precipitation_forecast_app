@@ -117,3 +117,97 @@ export function rateToCss(mmh: number): string {
   if (a === 0) return "transparent";
   return `rgba(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)}, ${a.toFixed(2)})`;
 }
+
+// --------------------------------------------------------------------------------------
+// Model disagreement
+// --------------------------------------------------------------------------------------
+
+/**
+ * Diverging scale for "physics minus AI" rain rate.
+ *
+ * Two hues with a **neutral midpoint**: blue where IFS is wetter, orange where AIFS is
+ * wetter, and nothing at all where they agree. A neutral centre is what makes "no
+ * disagreement" read as no signal; a hue there would invent one. Neither colour means
+ * "right" — the scale shows where the two forecasts part company, not which to believe.
+ */
+export const DELTA_COLORS = {
+  physicsWetter: [57, 135, 229] as [number, number, number], // blue 400
+  aiWetter: [217, 89, 38] as [number, number, number], // orange, dark step
+};
+
+/** Below this the models are treated as agreeing and nothing is drawn. */
+export const DELTA_DEADBAND_MMH = 0.05;
+/** Rate difference that saturates the scale. */
+export const DELTA_MAX_MMH = 4;
+
+// Must be ODD so the table has an exact centre cell. With an even size the midpoint
+// lands on a half index, `deltaBucketToDiff` never returns exactly zero, and the
+// "models agree" deadband never renders transparent — which painted the entire domain.
+const DELTA_LUT_SIZE = 513;
+
+function deltaSample(diff: number): [number, number, number, number] {
+  const mag = Math.abs(diff);
+  if (mag <= DELTA_DEADBAND_MMH) return [0, 0, 0, 0];
+  const t = Math.min(
+    1,
+    Math.log(mag / DELTA_DEADBAND_MMH) /
+      Math.log(DELTA_MAX_MMH / DELTA_DEADBAND_MMH),
+  );
+  const [r, g, b] = diff > 0 ? DELTA_COLORS.physicsWetter : DELTA_COLORS.aiWetter;
+  return [r, g, b, 0.25 + 0.7 * t];
+}
+
+function buildDeltaLut(): Uint8ClampedArray {
+  const lut = new Uint8ClampedArray(DELTA_LUT_SIZE * 4);
+  for (let k = 0; k < DELTA_LUT_SIZE; k++) {
+    const [r, g, b, a] = deltaSample(deltaBucketToDiff(k));
+    lut[k * 4] = r;
+    lut[k * 4 + 1] = g;
+    lut[k * 4 + 2] = b;
+    lut[k * 4 + 3] = a * 255;
+  }
+  return lut;
+}
+
+/** Signed log bucket: the middle of the table is zero difference. */
+export function deltaToBucket(diff: number): number {
+  const half = (DELTA_LUT_SIZE - 1) / 2;
+  const mag = Math.abs(diff);
+  if (mag <= DELTA_DEADBAND_MMH) return Math.round(half);
+  const t = Math.min(
+    1,
+    Math.log(mag / DELTA_DEADBAND_MMH) /
+      Math.log(DELTA_MAX_MMH / DELTA_DEADBAND_MMH),
+  );
+  const offset = Math.round(t * half);
+  return diff > 0 ? Math.round(half) + offset : Math.round(half) - offset;
+}
+
+function deltaBucketToDiff(k: number): number {
+  const half = (DELTA_LUT_SIZE - 1) / 2;
+  const offset = k - half;
+  if (offset === 0) return 0;
+  const t = Math.abs(offset) / half;
+  const mag =
+    DELTA_DEADBAND_MMH * Math.pow(DELTA_MAX_MMH / DELTA_DEADBAND_MMH, t);
+  return offset > 0 ? mag : -mag;
+}
+
+export const DELTA_LUT = buildDeltaLut();
+
+/** Legend swatches for the disagreement scale, driest-disagreement in the middle. */
+export const DELTA_BANDS = [
+  { label: "4", diff: -4 },
+  { label: "1", diff: -1 },
+  { label: "0.2", diff: -0.2 },
+  { label: "agree", diff: 0 },
+  { label: "0.2", diff: 0.2 },
+  { label: "1", diff: 1 },
+  { label: "4", diff: 4 },
+].map((b) => {
+  const [r, g, bl, a] = deltaSample(b.diff);
+  return {
+    label: b.label,
+    css: a === 0 ? "rgba(137,135,129,0.22)" : `rgba(${r}, ${g}, ${bl}, ${a})`,
+  };
+});

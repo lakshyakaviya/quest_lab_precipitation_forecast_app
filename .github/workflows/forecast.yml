@@ -52,8 +52,11 @@ jobs:
         working-directory: pipeline
         run: pytest -q
 
-      - name: Build the forecast cube
-        run: python -m precipitation.cli run --model ifs --out web/public/data
+      # Both models, resolved to the newest run they share so the comparison is
+      # like for like. AIFS publishes sooner and runs all four cycles, IFS reaches
+      # day 15 only at 00z and 12z, so the run is aligned down to IFS.
+      - name: Build the forecast cubes
+        run: python -m precipitation.cli run --model ifs --model aifs --out web/public/data
 
       - name: Verify published data
         run: python .github/scripts/verify_data.py web/public/data

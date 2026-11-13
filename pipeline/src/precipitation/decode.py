@@ -25,11 +25,16 @@ def _step_hours(value) -> int:
 def decode_window(
     grib_path: Path, steps: Sequence[int]
 ) -> tuple[np.ndarray, list[datetime]]:
-    """Read accumulated `tp` for `steps` and subset to the India window.
+    """Read accumulated `tp` for `steps`, subset to India, and convert to millimetres.
 
     Returns:
-        (n_steps, 141, 141) float32 accumulated precipitation in metres, ordered to
+        (n_steps, 141, 141) float32 accumulated precipitation in **mm**, ordered to
         match `steps`, and the list of valid times (UTC) for those steps.
+
+    The unit conversion happens here because the models disagree: IFS publishes tp in
+    metres and AIFS Single in kg m**-2, which is numerically millimetres. Treating an
+    AIFS field as metres overstates rainfall by 1000x. The units are read from the file
+    rather than assumed per model, and an unrecognised unit is an error.
 
     Raises if any requested step is missing, so a partially published run fails loudly
     instead of producing a cube with silently repeated frames.
@@ -61,22 +66,27 @@ def decode_window(
 
         run_time = _as_utc(ds["time"].values)
 
-        out = np.empty((len(steps), config.NLAT, config.NLON), dtype=np.float32)
-        for i, step in enumerate(steps):
-            field = tp.isel(step=available[step]).values  # reads one GRIB message
-            out[i] = field[lat_s, lon_s]
-        valid_times = [run_time + timedelta(hours=int(s)) for s in steps]
-
         units = tp.attrs.get("units")
-        if units != "m":
-            raise ValueError(f"expected tp in metres, got units={units!r}")
+        if units not in config.UNITS_TO_MM:
+            raise ValueError(
+                f"unrecognised tp units {units!r} in {grib_path.name}; "
+                f"known units are {sorted(config.UNITS_TO_MM)}"
+            )
+        to_mm = config.UNITS_TO_MM[units]
+
         step_type = tp.attrs.get("GRIB_stepType")
         if step_type != "accum":
             raise ValueError(f"expected accumulated tp, got stepType={step_type!r}")
 
+        out = np.empty((len(steps), config.NLAT, config.NLON), dtype=np.float32)
+        for i, step in enumerate(steps):
+            field = tp.isel(step=available[step]).values  # reads one GRIB message
+            out[i] = field[lat_s, lon_s] * to_mm
+        valid_times = [run_time + timedelta(hours=int(s)) for s in steps]
+
         print(
             f"[decode] {grib_path.name}: {len(steps)} steps, run "
-            f"{run_time:%Y-%m-%d %H}Z, window "
+            f"{run_time:%Y-%m-%d %H}Z, units {units!r} (x{to_mm:g} -> mm), window "
             f"{config.NLAT}x{config.NLON} lat {lats[lat_s][0]}..{lats[lat_s][-1]} "
             f"lon {lons[lon_s][0]}..{lons[lon_s][-1]}"
         )

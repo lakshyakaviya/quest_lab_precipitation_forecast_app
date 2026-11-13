@@ -91,12 +91,19 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--date is required when --time is given")
 
     keys = args.model or [config.IFS.key]
+    models = [config.MODELS[k] for k in keys]
     out_dir: Path = args.out
+
+    # With more than one model the comparison is only honest if they share an analysis
+    # time, so the run is resolved once across all of them rather than per model.
+    if run_time is None and len(models) > 1:
+        run_time = fetch.common_run(models)
+
     metas = []
-    for key in keys:
+    for model in models:
         metas.append(
             build(
-                config.MODELS[key],
+                model,
                 out_dir=out_dir,
                 run_time=run_time,
                 use_cache=not args.no_cache,

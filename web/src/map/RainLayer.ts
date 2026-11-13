@@ -12,12 +12,15 @@
  */
 
 import type { Map as MapLibreMap } from "maplibre-gl";
-import type { Cube } from "../lib/cube";
+import { DELTA_LUT, RAIN_LUT, deltaToBucket, rateToBucket } from "../lib/colormap";
 import { RAIN_SOURCE_ID } from "./basemapStyle";
 
+/** Which colour table a field is painted through. */
+export type FieldScale = "rain" | "delta";
+
 export interface RainSurface {
-  /** Show the field for a given frame index. */
-  setFrame(frame: number): void;
+  /** Paint a field of per-cell values, row-major, north row first. */
+  setField(values: Float32Array, scale: FieldScale): void;
   /** Keep uploading every rendered map frame (used while animating). */
   startAnimating(): void;
   /** Stop uploading, to leave the GPU idle while paused. */
@@ -35,17 +38,16 @@ export class CanvasRainSurface implements RainSurface {
   readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly image: ImageData;
-  private readonly cube: Cube;
+  private readonly cells: number;
   private map: MapLibreMap | null = null;
   private animating = false;
   private pendingPause = 0;
-  private currentFrame = -1;
 
-  constructor(cube: Cube) {
-    this.cube = cube;
+  constructor(nLon: number, nLat: number) {
+    this.cells = nLon * nLat;
     this.canvas = document.createElement("canvas");
-    this.canvas.width = cube.nLon;
-    this.canvas.height = cube.nLat;
+    this.canvas.width = nLon;
+    this.canvas.height = nLat;
     // Off-screen but still laid out: a `display: none` canvas can read back empty in
     // some engines, while an off-viewport one is always a valid bitmap source.
     this.canvas.style.position = "absolute";
@@ -57,7 +59,7 @@ export class CanvasRainSurface implements RainSurface {
     const ctx = this.canvas.getContext("2d", { willReadFrequently: false });
     if (!ctx) throw new Error("could not get a 2D context for the rain canvas");
     this.ctx = ctx;
-    this.image = ctx.createImageData(cube.nLon, cube.nLat);
+    this.image = ctx.createImageData(nLon, nLat);
   }
 
   /** Called once the map's style (and therefore the canvas source) exists. */
@@ -74,14 +76,24 @@ export class CanvasRainSurface implements RainSurface {
     return src ?? null;
   }
 
-  setFrame(frame: number): void {
-    const clamped = Math.max(0, Math.min(this.cube.nFrames - 1, Math.round(frame)));
-    if (clamped === this.currentFrame) return;
-    this.currentFrame = clamped;
-
-    this.cube.paintFrame(clamped, this.image.data);
+  setField(values: Float32Array, scale: FieldScale): void {
+    if (values.length !== this.cells) {
+      throw new Error(
+        `field has ${values.length} cells, canvas expects ${this.cells}`,
+      );
+    }
+    const lut = scale === "delta" ? DELTA_LUT : RAIN_LUT;
+    const toBucket = scale === "delta" ? deltaToBucket : rateToBucket;
+    const out = this.image.data;
+    for (let c = 0; c < this.cells; c++) {
+      const k = toBucket(values[c]!) * 4;
+      const o = c * 4;
+      out[o] = lut[k]!;
+      out[o + 1] = lut[k + 1]!;
+      out[o + 2] = lut[k + 2]!;
+      out[o + 3] = lut[k + 3]!;
+    }
     this.ctx.putImageData(this.image, 0, 0);
-
     if (!this.animating) this.uploadOnce();
   }
 

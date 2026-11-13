@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Cube, loadData, type PointSeries } from "./lib/cube";
-import { MapView, type SelectedPoint } from "./map/MapView";
+import { Comparison, Cube, loadData, type PointSeries } from "./lib/cube";
+import { MapView, type SelectedPoint, type ViewMode } from "./map/MapView";
 import { PointPanel } from "./components/PointPanel";
 import { TimeScrubber, type Speed } from "./components/TimeScrubber";
 import { Legend } from "./components/Legend";
+import { ModelSwitch } from "./components/ModelSwitch";
 import { AttributionBar } from "./components/AttributionBar";
 
 /** Milliseconds per forecast frame at 1x. Slow enough to read, fast enough to feel. */
@@ -12,12 +13,15 @@ const FRAME_MS = 320;
 
 export default function App() {
   const [cube, setCube] = useState<Cube | null>(null);
+  const [comparison, setComparison] = useState<Comparison | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [frame, setFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<Speed>(1);
   const [selected, setSelected] = useState<SelectedPoint | null>(null);
   const [now, setNow] = useState(() => new Date());
+  const [mode, setMode] = useState<ViewMode>("ifs");
+  const [split, setSplit] = useState(0.5);
 
   // The clock moves while the page is open, and a run is already several hours old
   // when it is published, so "now" is re-read periodically rather than captured once.
@@ -29,10 +33,11 @@ export default function App() {
   useEffect(() => {
     const controller = new AbortController();
     loadData(controller.signal)
-      .then(({ cube: loaded }) => {
-        setCube(loaded);
+      .then(({ primary, comparison: cmp }) => {
+        setCube(primary);
+        setComparison(cmp);
         // Open on the present, not on the start of a forecast that is partly history.
-        setFrame(loaded.frameAtTime(new Date()));
+        setFrame(primary.frameAtTime(new Date()));
       })
       .catch((e: unknown) => {
         if (controller.signal.aborted) return;
@@ -114,6 +119,13 @@ export default function App() {
     });
   }, [cube, selected, now]);
 
+  const aiSeries: PointSeries | null = useMemo(() => {
+    if (!comparison || !selected) return null;
+    return comparison.ai.seriesAt(selected.lat, selected.lon, {
+      fromFrame: comparison.ai.frameAtTime(now),
+    });
+  }, [comparison, selected, now]);
+
   const onFrameSelect = useCallback((f: number) => {
     setPlaying(false);
     setFrame(f);
@@ -170,20 +182,27 @@ export default function App() {
             Ten-day rainfall forecast for India
           </span>
         </h1>
-        <Legend />
+        <ModelSwitch mode={mode} comparison={comparison} onMode={setMode} />
+        <Legend mode={mode} />
       </header>
 
       <div className="app__body">
         <MapView
           cube={cube}
+          comparison={comparison}
+          mode={mode}
           frame={frame}
           playing={playing}
           selected={selected}
+          split={split}
+          onSplit={setSplit}
           onSelect={setSelected}
         />
         <PointPanel
           cube={cube}
           series={series}
+          aiCube={comparison?.ai ?? null}
+          aiSeries={aiSeries}
           frame={frame}
           now={now}
           onFrameSelect={onFrameSelect}

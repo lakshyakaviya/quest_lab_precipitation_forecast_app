@@ -269,6 +269,107 @@ export class Cube {
   isWet(frame: number, j: number, i: number): boolean {
     return this.rate(frame, j, i) > DRY_THRESHOLD_MMH;
   }
+
+  /**
+   * Mean rain rate over an arbitrary lead-time window, weighted by overlap.
+   *
+   * Needed to compare models on equal terms: IFS is 3-hourly out to T+144h while AIFS
+   * is uniformly 6-hourly, so a like-for-like difference has to average the finer
+   * model over the coarser model's window rather than pick one sub-interval.
+   */
+  windowMeanRate(fromLead: number, toLead: number, j: number, i: number): number {
+    const span = toLead - fromLead;
+    if (span <= 0) return 0;
+    let weighted = 0;
+    for (let f = 0; f < this.nFrames; f++) {
+      const a = Math.max(fromLead, this.stepStart[f]!);
+      const b = Math.min(toLead, this.stepEnd[f]!);
+      if (b > a) weighted += this.rate(f, j, i) * (b - a);
+    }
+    return weighted / span;
+  }
+
+  /** Fill `out` with this cube's mean rate over a lead-time window, cell by cell. */
+  paintWindowInto(fromLead: number, toLead: number, out: Float32Array): void {
+    out.fill(0);
+    const span = toLead - fromLead;
+    if (span <= 0) return;
+    for (let f = 0; f < this.nFrames; f++) {
+      const a = Math.max(fromLead, this.stepStart[f]!);
+      const b = Math.min(toLead, this.stepEnd[f]!);
+      if (b <= a) continue;
+      const w = (b - a) / span;
+      const base = f * this.cellsPerFrame;
+      for (let c = 0; c < this.cellsPerFrame; c++) {
+        out[c] += this.values[base + c]! * w;
+      }
+    }
+  }
+
+  /** Copy one frame's rates into `out`. */
+  copyFrameInto(frame: number, out: Float32Array): void {
+    const base = frame * this.cellsPerFrame;
+    for (let c = 0; c < this.cellsPerFrame; c++) out[c] = this.values[base + c]!;
+  }
+}
+
+/**
+ * The two forecasts being compared, and the shared time windows they are compared on.
+ *
+ * The comparison window is the *coarser* model's interval — 6 h — because averaging the
+ * finer model up is honest while interpolating the coarser one down is not.
+ */
+export class Comparison {
+  readonly physics: Cube;
+  readonly ai: Cube;
+  /** Shared 6 h windows, as [fromLead, toLead] pairs. */
+  readonly windows: { from: number; to: number; validTime: Date }[];
+
+  constructor(physics: Cube, ai: Cube) {
+    this.physics = physics;
+    this.ai = ai;
+    const maxLead = Math.min(physics.maxLead, ai.maxLead);
+    this.windows = [];
+    for (let f = 0; f < ai.nFrames; f++) {
+      const to = ai.stepEnd[f]!;
+      if (to > maxLead) break;
+      this.windows.push({
+        from: ai.stepStart[f]!,
+        to,
+        validTime: ai.validTimes[f]!,
+      });
+    }
+  }
+
+  /** Do both models come from the same analysis time? */
+  get aligned(): boolean {
+    return this.physics.runTime.getTime() === this.ai.runTime.getTime();
+  }
+
+  /** The shared window containing a lead time. */
+  windowAtLead(lead: number): { from: number; to: number; validTime: Date } {
+    for (const w of this.windows) {
+      if (lead <= w.to) return w;
+    }
+    return this.windows[this.windows.length - 1]!;
+  }
+
+  /** Signed difference in mean rate (physics minus AI) over a shared window. */
+  deltaAtLead(lead: number, out: Float32Array, scratch: Float32Array): void {
+    const w = this.windowAtLead(lead);
+    this.physics.paintWindowInto(w.from, w.to, out);
+    this.ai.paintWindowInto(w.from, w.to, scratch);
+    for (let c = 0; c < out.length; c++) out[c]! -= scratch[c]!;
+  }
+
+  /** Signed difference at one point, for the readout. */
+  deltaAt(lead: number, j: number, i: number): number {
+    const w = this.windowAtLead(lead);
+    return (
+      this.physics.windowMeanRate(w.from, w.to, j, i) -
+      this.ai.windowMeanRate(w.from, w.to, j, i)
+    );
+  }
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -279,37 +380,52 @@ async function fetchJson<T>(url: string): Promise<T> {
 
 export interface LoadedData {
   index: DataIndex;
-  cube: Cube;
+  /** Cubes by model key, e.g. "ifs" and "aifs". */
+  cubes: Map<string, Cube>;
+  /** The model shown by default. */
+  primary: Cube;
+  /** Present only when both a physics and an AI forecast were published. */
+  comparison: Comparison | null;
 }
 
-/**
- * Fetch the data index, then the first model's metadata and cube.
- *
- * `BASE_URL` is respected so the same code works at the dev server root and under the
- * GitHub Pages project path.
- */
-export async function loadData(signal?: AbortSignal): Promise<LoadedData> {
-  const base = `${import.meta.env.BASE_URL}data/`;
-  const index = await fetchJson<DataIndex>(`${base}index.json`);
-  const first = index.models[0];
-  if (!first) throw new Error("data index lists no models");
-
-  const meta = await fetchJson<CubeMeta>(`${base}${first.meta}`);
-
+async function loadCube(base: string, metaFile: string, signal?: AbortSignal) {
+  const meta = await fetchJson<CubeMeta>(`${base}${metaFile}`);
   const res = await fetch(`${base}${meta.cube.file}`, {
     cache: "no-cache",
     ...(signal ? { signal } : {}),
   });
   if (!res.ok) throw new Error(`${meta.cube.file} -> HTTP ${res.status}`);
   const buffer = await res.arrayBuffer();
-
   if (buffer.byteLength !== meta.cube.bytes) {
     throw new Error(
-      `cube is ${buffer.byteLength} bytes, metadata says ${meta.cube.bytes}`,
+      `${meta.cube.file} is ${buffer.byteLength} bytes, metadata says ${meta.cube.bytes}`,
     );
   }
   const expected = meta.cube.n_frames * meta.grid.nlat * meta.grid.nlon;
-  const values = decodeHalf(buffer, expected);
+  return new Cube(meta, decodeHalf(buffer, expected));
+}
 
-  return { index, cube: new Cube(meta, values) };
+/**
+ * Fetch the data index and every cube it lists.
+ *
+ * `BASE_URL` is respected so the same code works at the dev server root and under the
+ * GitHub Pages project path. Cubes are fetched in parallel; together they are a little
+ * over 500 KB on the wire.
+ */
+export async function loadData(signal?: AbortSignal): Promise<LoadedData> {
+  const base = `${import.meta.env.BASE_URL}data/`;
+  const index = await fetchJson<DataIndex>(`${base}index.json`);
+  if (!index.models.length) throw new Error("data index lists no models");
+
+  const loaded = await Promise.all(
+    index.models.map(async (m) => [m.key, await loadCube(base, m.meta, signal)] as const),
+  );
+  const cubes = new Map(loaded);
+
+  const primary = cubes.get("ifs") ?? loaded[0]![1];
+  const ai = cubes.get("aifs") ?? null;
+  const physics = cubes.get("ifs") ?? null;
+  const comparison = physics && ai ? new Comparison(physics, ai) : null;
+
+  return { index, cubes, primary, comparison };
 }

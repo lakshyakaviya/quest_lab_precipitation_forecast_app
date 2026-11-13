@@ -160,19 +160,31 @@ DEFAULT_OUT_DIR = REPO_ROOT / "web" / "public" / "data"
 # --------------------------------------------------------------------------------------
 # Quality control
 # --------------------------------------------------------------------------------------
+# Everything downstream of `decode` works in MILLIMETRES. The source files do not agree
+# on units -- IFS publishes tp in metres, AIFS Single in kg m**-2 (numerically mm, a
+# 1000x difference) -- so `decode.decode_window` converts to mm and the rest of the
+# pipeline never has to know which model it came from.
+#
 # De-accumulated GRIB carries small negative values because consecutive accumulations
 # are independently quantised. Open-data tp uses grid_ccsds packing at 12 bits with a
-# binary scale factor around -13, so one quantum is 2**-13 = 1.22e-4 m.
+# binary scale factor around -13, so one IFS quantum is 2**-13 m = 0.122 mm.
 #
 # Measured on the IFS 2026-11-12 00Z run (65 steps, India window, 1,272,384 cells):
 # 0.37% of cells decreased, the worst by exactly -1.000 quantum, and clamping those to
-# zero added 0.069% to total accumulated mass.
+# zero added 0.069% to total accumulated mass. The next run's worst case was -2 quanta,
+# so a tolerance of one quantum would have broken production.
 #
-# The tolerance is set at ~8 quanta. That comfortably absorbs packing noise while still
+# The tolerance is ~8 quanta. That comfortably absorbs packing noise while still
 # separating it from a genuine fault: steps retrieved out of order or mismatched produce
 # decreases of the order of the accumulated total, i.e. tens to hundreds of millimetres.
-GRIB_PACKING_QUANTUM_M = 2.0**-13  # 1.22e-4 m = 0.122 mm
-NEGATIVE_TOLERANCE_M = 8 * GRIB_PACKING_QUANTUM_M  # ~9.8e-4 m, just under 1 mm
+GRIB_PACKING_QUANTUM_MM = (2.0**-13) * 1000.0  # 0.1220703125 mm
+NEGATIVE_TOLERANCE_MM = 8 * GRIB_PACKING_QUANTUM_MM  # ~0.977 mm
+
+# How each source unit converts to millimetres.
+UNITS_TO_MM = {
+    "m": 1000.0,  # IFS
+    "kg m**-2": 1.0,  # AIFS Single: 1 kg m-2 of water is 1 mm depth
+}
 
 # Sanity ceiling on a grid-cell-average rain rate. The wettest short-period rates in
 # India reach roughly 50-80 mm/h at a point; a 0.25 degree cell average far above that

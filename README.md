@@ -1,4 +1,4 @@
-# Monsoon Lens
+﻿# Monsoon Lens
 
 **Ten-day precipitation forecast for India, built from ECMWF Open Data.**
 
@@ -11,46 +11,77 @@ November 2026.
 
 ## What it does
 
-Fetches total precipitation from ECMWF's operational forecast twice a day, converts it
-into a compact forecast cube for the India region, and serves an animated map where you
-can scrub through the next ten days and click anywhere for a rainfall timeline.
+Fetches total precipitation from ECMWF twice a day — from **both** its physics model
+and its AI model — converts them into compact forecast cubes for the India region, and
+serves an animated map where you can scrub through the next ten days, click anywhere
+for a rainfall timeline, and put the two forecasts against each other.
 
-- **Animated rain field** over India at 0.25° (~28 km), 64 frames from T+3h to T+240h.
+- **Animated rain field** over India at 0.25° (~28 km), T+3h to T+240h.
+- **Physics vs AI.** IFS HRES (physics) and AIFS Single (data-driven), always from the
+  same analysis time. Four views: either model alone, a draggable swipe between them,
+  and a diverging **disagreement** layer showing where and by how much they part company.
 - **Time scrubber** with play/pause, speed control, and keyboard control
-  (`space`, `←`/`→`, `Home`/`End`).
-- **Click anywhere** for that grid cell's rainfall: per-interval totals, cumulative
-  build-up, peak intensity, when the rain starts, and a table view of every value.
-- **No backend.** The whole forecast is ~350 KB over the wire, so every query is an
-  array lookup in the browser.
+  (`space`, `←`/`→`, `Home`/`End`). It opens on the present moment, and the part of the
+  forecast that has already elapsed is marked as past throughout the UI.
+- **Click anywhere** for that cell's rainfall from both models: rate over time,
+  cumulative build-up, peak intensity, when the rain starts, a plain-language verdict
+  on whether the models agree, and a table view.
+- **No backend.** Both forecasts together are a little over 500 KB on the wire, so every
+  query is an array lookup in the browser.
+
+### What the comparison shows
+
+AI weather models are known to produce smoother, less extreme precipitation than
+physics models, and the app makes that visible rather than asserting it. On the
+2026-11-12 12Z run over India:
+
+| | IFS HRES (physics) | AIFS Single (AI) |
+|---|---|---|
+| Peak rate | 64.5 mm/h | 13.0 mm/h |
+| Share of cells raining | 14% | 19% |
+
+The AI model spreads rain over a wider area at lower intensity. In the swipe view the
+physics side is granular and speckled while the AI side is made of large smooth blobs.
+Neither is ground truth; this app does not verify either against observations.
 
 ## How it works
 
 ```
-ECMWF Open Data  ──fetch──▶  GRIB2 (65 steps, ~33 MB)
-                                 │
-                             de-accumulate, convert m ▶ mm/h, subset to India
-                                 │
-                             cube.f16  (64 × 141 × 141 float16 = 2.54 MB)
-                             meta.json (valid times, interval lengths, provenance)
-                                 │
-   GitHub Actions ──twice daily──▶ build the web app ──▶ GitHub Pages
+ECMWF Open Data ──▶ IFS  GRIB2 (65 steps, 31 MB) ──▶ ifs.f16   64 frames, 2.54 MB
+                └─▶ AIFS GRIB2 (41 steps, 17 MB) ──▶ aifs.f16  40 frames, 1.59 MB
+                         de-accumulate · normalise units · subset to India
+                         meta.json: valid times, interval lengths, provenance
+                                           │
+            GitHub Actions ──twice daily──▶ build the web app ──▶ GitHub Pages
 ```
 
 **The data.** ECMWF's `tp` (total precipitation) is *accumulated from the start of the
-forecast* and expressed in **metres**. The pipeline differences consecutive steps and
-divides each difference by its own interval length — which matters because IFS changes
-step spacing from 3 h to 6 h at T+144h, so a constant divisor would overstate rain rates
-across the whole second half of the forecast. 65 accumulation steps therefore become
-**64 interval frames**, each labelled by the valid time at the *end* of its interval.
+forecast*. The pipeline differences consecutive steps and divides each difference by its
+own interval length — which matters because IFS changes step spacing from 3 h to 6 h at
+T+144h, so a constant divisor would overstate rain rates across the whole second half of
+the forecast. 65 accumulation steps therefore become **64 interval frames**, each
+labelled by the valid time at the *end* of its interval.
+
+**Units differ by model and are read from the file, never assumed:** IFS publishes `tp`
+in **metres**, AIFS Single in **kg m⁻²** (numerically millimetres). Treating an AIFS
+field as metres overstates rainfall by 1000×. Everything downstream of `decode` works in
+millimetres.
 
 Values are stored as a **rain rate in mm/h** rather than an interval total, so one
-physical quantity spans the spacing change; the app multiplies back up by each frame's
-interval length to show mm/3h or mm/6h.
+physical quantity spans both the spacing change and the two models' different
+resolutions; the app multiplies back up by each frame's interval length to show mm/3h
+or mm/6h.
+
+**Comparing fairly.** The two models' newest complete runs do not line up — AIFS is
+released sooner and runs all four cycles, while IFS reaches day 15 only at 00z and 12z —
+so the pipeline resolves one shared run for both and refuses to pretend otherwise.
+Differences are computed over **6-hourly windows**, the coarsest interval the two share,
+by averaging the finer model up rather than interpolating the coarser one down.
 
 **The front end.** The India window is 141 × 141 cells, small enough that the entire
 forecast ships to the browser as one float16 array. The field is coloured through a
 log-scaled single-hue ramp into a 141 × 141 canvas and handed to MapLibre as a raster
-source. The basemap is a 137 KB Natural Earth extract bundled into the app — no tile
+source. The basemap is a 157 KB Natural Earth extract bundled into the app — no tile
 server, no API key, no glyph server, nothing to rate-limit.
 
 ## Running it locally
@@ -62,10 +93,10 @@ Requires Python 3.11+ and Node 20.19+.
 python -m venv .venv
 .venv/Scripts/activate            # Windows;  source .venv/bin/activate elsewhere
 pip install -e "./pipeline[dev]"
-pytest pipeline/tests             # 37 tests, no network needed
+pytest pipeline/tests             # 45 tests, no network needed
 
 python -m precipitation.cli latest                        # what runs are published
-python -m precipitation.cli run --model ifs --out web/public/data
+python -m precipitation.cli run --model ifs --model aifs --out web/public/data
 
 # 2. Web app
 cd web
@@ -120,7 +151,7 @@ history never accumulates binaries.
 ## Verification
 
 `pytest pipeline/tests` covers the de-accumulation maths, the 3 h → 6 h interval change,
-GRIB packing tolerance, the cube/metadata contract, and timezone handling (37 tests, no
+GRIB packing tolerance, the cube/metadata contract, units, and timezone handling (45 tests, no
 network needed). Beyond that, two checks confirm the output means what it claims:
 
 **Independent cross-check.** Daily totals compared against Open-Meteo's ECMWF IFS feed —
@@ -155,7 +186,13 @@ each is now covered by a test:
 3. **`ecmwf-opendata` returns naive datetimes that are already UTC.** Treating one as
    local time shifted every timestamp by −5:30 on an IST machine — correct in CI, wrong
    in development. Run times are normalised at the boundary, and the encoder now refuses
-   a naive datetime outright.
+   a naive datetime outright. (The fix then broke CI, because the client compares the
+   requested date against a naive constant internally; the local GRIB cache had hidden
+   it by skipping the download entirely.)
+4. **AIFS publishes `tp` in kg m⁻², not metres.** Measured ratio of AIFS to IFS
+   accumulated `tp` at T+24h was 949.7 — a thousandfold unit difference, not a physical
+   one. Units are read from each file and converted, and an unknown unit is an error
+   rather than a guess.
 
 ## Known limitations
 
@@ -173,7 +210,12 @@ each is now covered by a test:
   quantum). Those are clamped to zero, which adds about 0.07% to total rainfall. The
   exact figures for each run are published in `meta.json` under `deaccumulation`.
 - **Forecast horizon capped at day 10** even though IFS runs to day 15.
-- **One model, one run.** No comparison against AIFS, observations, or the previous run.
+- **No verification.** The two models are compared against each other, never against
+  observations, so the app can show *that* they disagree but never which is right.
+- **The models are compared at 6-hourly resolution**, the coarsest interval they share,
+  even though IFS is 3-hourly for the first six days.
+- **One run.** No comparison against the previous run, so forecast-to-forecast
+  consistency is not visible.
 - **Boundaries** are Natural Earth's depiction and are not an authoritative statement on
   any border.
 - **Dark theme only** — deliberate: a rain field only reads against a dark surface.

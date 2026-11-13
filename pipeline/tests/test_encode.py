@@ -78,7 +78,7 @@ def _deacc(rate: np.ndarray) -> transform.Deaccumulated:
         rate_mm_h=rate,
         clamped_cells=0,
         clamped_fraction=0.0,
-        worst_decrement_m=0.0,
+        worst_decrement_mm=0.0,
         worst_decrement_quanta=0.0,
         mass_added_fraction=0.0,
     )
@@ -166,7 +166,7 @@ def test_meta_reports_deaccumulation_clamping(tmp_path):
         rate_mm_h=rate,
         clamped_cells=4742,
         clamped_fraction=0.003727,
-        worst_decrement_m=-config.GRIB_PACKING_QUANTUM_M,
+        worst_decrement_mm=-config.GRIB_PACKING_QUANTUM_MM,
         worst_decrement_quanta=-1.0,
         mass_added_fraction=0.000693,
     )
@@ -184,7 +184,7 @@ def test_meta_reports_deaccumulation_clamping(tmp_path):
     assert d["clamped_cells"] == 4742
     assert d["worst_decrement_quanta"] == pytest.approx(-1.0)
     assert d["mass_added_fraction"] == pytest.approx(0.000693)
-    assert d["packing_quantum_m"] == pytest.approx(2.0**-13)
+    assert d["packing_quantum_mm"] == pytest.approx((2.0**-13) * 1000.0)
 
 
 def test_index_lists_every_model(tmp_path):

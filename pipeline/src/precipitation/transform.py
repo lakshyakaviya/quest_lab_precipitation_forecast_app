@@ -1,8 +1,9 @@
-"""De-accumulation, unit conversion and quality control.
+"""De-accumulation and quality control.
 
 This is the correctness core of the pipeline. ECMWF's `tp` is *accumulated from the
-start of the forecast* and expressed in **metres**, so a forecast of N accumulation
-steps yields N-1 interval frames.
+start of the forecast*, so a forecast of N accumulation steps yields N-1 interval
+frames. Input here is already in **millimetres** — `decode.decode_window` normalises
+the units, because IFS publishes metres and AIFS Single publishes kg m**-2.
 
 The subtlety that makes this worth its own tested module: IFS HRES changes step spacing
 from 3 h to 6 h at T+144 h. Dividing every interval by a constant 3 would overstate rain
@@ -19,8 +20,6 @@ import numpy as np
 
 from . import config
 
-MM_PER_M = 1000.0
-
 
 @dataclass(frozen=True)
 class Deaccumulated:
@@ -34,7 +33,7 @@ class Deaccumulated:
     rate_mm_h: np.ndarray  # (n_frames, n_lat, n_lon) float32, mm/h
     clamped_cells: int
     clamped_fraction: float
-    worst_decrement_m: float
+    worst_decrement_mm: float
     worst_decrement_quanta: float
     mass_added_fraction: float
 
@@ -56,17 +55,17 @@ def interval_hours(steps: Sequence[int]) -> np.ndarray:
 
 
 def deaccumulate(
-    accum_m: np.ndarray,
+    accum_mm: np.ndarray,
     steps: Sequence[int],
     *,
-    negative_tolerance_m: float = config.NEGATIVE_TOLERANCE_M,
+    negative_tolerance_mm: float = config.NEGATIVE_TOLERANCE_MM,
 ) -> Deaccumulated:
     """Convert cumulative total precipitation into a per-interval rain *rate*.
 
     Args:
-        accum_m: (n_steps, n_lat, n_lon) cumulative precipitation in metres.
+        accum_mm: (n_steps, n_lat, n_lon) cumulative precipitation in millimetres.
         steps: the accumulation step values in hours, starting at 0.
-        negative_tolerance_m: decrements more negative than this are an error rather
+        negative_tolerance_mm: decrements more negative than this are an error rather
             than GRIB packing noise.
 
     Returns:
@@ -77,7 +76,7 @@ def deaccumulate(
     the 3 h -> 6 h spacing change; the front end multiplies back up by each frame's
     interval length to show mm/3h or mm/6h.
     """
-    accum = np.asarray(accum_m)
+    accum = np.asarray(accum_mm)
     if accum.ndim != 3:
         raise ValueError(f"expected (step, lat, lon), got shape {accum.shape}")
     hours = interval_hours(steps)
@@ -89,30 +88,30 @@ def deaccumulate(
     if np.isnan(accum).any():
         raise ValueError("NaNs present in accumulated precipitation")
 
-    delta_m = np.diff(accum, axis=0).astype(np.float64)
+    delta_mm = np.diff(accum, axis=0).astype(np.float64)
 
-    worst = float(delta_m.min()) if delta_m.size else 0.0
-    if worst < -negative_tolerance_m:
+    worst = float(delta_mm.min()) if delta_mm.size else 0.0
+    if worst < -negative_tolerance_mm:
         raise ValueError(
-            f"accumulated precipitation decreased by {worst:.3g} m, beyond the "
-            f"{negative_tolerance_m:.3g} m packing tolerance "
-            f"({worst / config.GRIB_PACKING_QUANTUM_M:.1f} quanta) -- steps are "
+            f"accumulated precipitation decreased by {worst:.3g} mm, beyond the "
+            f"{negative_tolerance_mm:.3g} mm packing tolerance "
+            f"({worst / config.GRIB_PACKING_QUANTUM_MM:.1f} quanta) -- steps are "
             "probably out of order or mismatched"
         )
 
-    negative = delta_m < 0.0
+    negative = delta_mm < 0.0
     clamped_cells = int(negative.sum())
-    raw_total = float(delta_m.sum())
-    np.clip(delta_m, 0.0, None, out=delta_m)
-    clamped_total = float(delta_m.sum())
+    raw_total = float(delta_mm.sum())
+    np.clip(delta_mm, 0.0, None, out=delta_mm)
+    clamped_total = float(delta_mm.sum())
 
-    rate = (delta_m * MM_PER_M) / hours[:, None, None]
+    rate = delta_mm / hours[:, None, None]
     return Deaccumulated(
         rate_mm_h=rate.astype(np.float32, copy=False),
         clamped_cells=clamped_cells,
-        clamped_fraction=clamped_cells / delta_m.size if delta_m.size else 0.0,
-        worst_decrement_m=worst,
-        worst_decrement_quanta=worst / config.GRIB_PACKING_QUANTUM_M,
+        clamped_fraction=clamped_cells / delta_mm.size if delta_mm.size else 0.0,
+        worst_decrement_mm=worst,
+        worst_decrement_quanta=worst / config.GRIB_PACKING_QUANTUM_MM,
         mass_added_fraction=(
             (clamped_total - raw_total) / clamped_total if clamped_total else 0.0
         ),

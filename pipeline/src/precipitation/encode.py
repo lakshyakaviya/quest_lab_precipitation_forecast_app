@@ -140,10 +140,10 @@ def write_cube(
         "deaccumulation": {
             "clamped_cells": deacc.clamped_cells,
             "clamped_fraction": deacc.clamped_fraction,
-            "worst_decrement_m": deacc.worst_decrement_m,
+            "worst_decrement_mm": deacc.worst_decrement_mm,
             "worst_decrement_quanta": deacc.worst_decrement_quanta,
             "mass_added_fraction": deacc.mass_added_fraction,
-            "packing_quantum_m": config.GRIB_PACKING_QUANTUM_M,
+            "packing_quantum_mm": config.GRIB_PACKING_QUANTUM_MM,
         },
         "source": config.SOURCE_ATTRIBUTION,
     }
