@@ -57,9 +57,10 @@ separating them:
 - **×1000 from units**, which is the whole reason the ratio is near a thousand at all.
   Treating an AIFS field as metres would overstate rainfall thousandfold.
 - **×0.9497 from the models themselves.** Once the unit factor is divided out, AIFS
-  carries about **5% less** total water than IFS over India at that lead time. That
-  residual is a genuine model difference, not a rounding artefact — it is the same
-  smoothing tendency that shows up far more dramatically in peak intensity (§6).
+  carries about **5% less** total water than IFS over India at that lead time, on that
+  same 2026-11-12 12Z run. That residual is a genuine model difference, not a rounding
+  artefact — it is the same smoothing tendency that shows up far more dramatically in
+  peak intensity (§6). The 5% is one run's figure, not a constant.
 
 So the right reading is "a thousandfold unit factor, with a few per cent of real
 disagreement riding on top", not "a clean 1000×". Units are read from each file and
@@ -120,6 +121,10 @@ little-endian, rows north → south, in mm/h:
 |---|---|---|---|
 | IFS | 64 | 2,544,768 | ~330 KB |
 | AIFS | 40 | 1,590,480 | ~210 KB |
+
+The byte counts are fixed by the grid and frame count and never vary. The gzipped
+figures are from the 2026-11-13 00Z run and move with the forecast — precipitation is
+mostly zeros, so a wetter run compresses less well.
 
 float16 holds about three significant digits — irrelevant for reading a forecast, but
 the cube is not the artefact to use for numerical verification; use the source GRIB.
@@ -281,7 +286,7 @@ Separating the north makes the picture consistent:
 So the dry areas are the plains and the desert — Delhi and Mumbai both at 0.0 mm — while
 the Himalayan arc carries modest means with individual cells well above anything in the
 northwest, which is what a passing western disturbance looks like. Srinagar reads
-**16.4 mm** on this run. Nearly all of that is **snow**, reported as the depth of water it
+**16.4 mm** on the 2026-11-13 00Z run. Nearly all of that is **snow**, reported as the depth of water it
 would melt into (§ *Known sources of error* and the README's limitations), so roughly
 16 cm of snow rather than 16 mm of rain. "The Himalaya is dry in November" would be both
 wrong and inconsistent with that caveat; the correct statement is that the north is dry
@@ -301,5 +306,6 @@ front end and asserts the rounding rule used for displayed differences.
    resolves no terrain within a cell.
 3. **Deterministic only** — one run of each model, no ensemble, so no uncertainty range.
 4. **Comparison resolution** of 6 h, coarser than IFS's native 3 h for the first six days.
-5. **Clamping** of negative decrements, +0.07% mass, reported per run.
+5. **Clamping** of negative decrements — +0.069% mass on the 2026-11-12 00Z run, and
+   published per run in `meta.json` rather than assumed constant.
 6. **float16 storage**, about three significant digits.

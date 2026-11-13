@@ -9,9 +9,10 @@ November 2026.
 
 ![Monsoon Lens: scrubbing ten days of forecast rainfall over India, opening the board of places the two models most disagree about, swiping the physics forecast against the AI forecast, and viewing the signed difference between them](docs/media/monsoon-lens.gif)
 
-*Recorded from a production build of this commit, on the 2026-11-13 00Z run. The point it
-settles on is Chennai, where the AI model expects 179 mm and the physics model 13 mm — the
-case examined below.*
+*Recorded from a production build of this commit, on the **2026-11-13 00Z run**. The point
+it settles on is Chennai, where the AI model expects 179 mm against the physics model's
+13 mm over the remainder of that run — the case examined below. Every figure visible in
+the recording belongs to that run; the live site has since moved on.*
 
 ---
 
@@ -69,7 +70,7 @@ around 14 November and tracks north-west for the next five days. They disagree a
 almost everything that matters about it.
 
 Tracking the wettest cell in a box over the Bay (8–22°N, 80–92°E) at matching valid
-times:
+times, **all figures from the 2026-11-13 00Z run**:
 
 | Valid (UTC) | IFS HRES core | AIFS Single core | Separation |
 |---|---|---|---|
@@ -84,7 +85,7 @@ broad smear that drifts west and comes ashore near **Nellore and Chennai** inste
 six the two cores are **370 km apart** and differ **six-fold** in peak intensity.
 
 Where that lands is close to a mirror image. Totals over the whole forecast
-(T+0h → T+240h) at the coastal cells:
+(T+0h → T+240h) at the coastal cells, **2026-11-13 00Z run**:
 
 | | IFS HRES (physics) | AIFS Single (AI) |
 |---|---|---|
@@ -92,8 +93,8 @@ Where that lands is close to a mirror image. Totals over the whole forecast
 | Nellore (14.44°N, 79.99°E) | 7 mm | **179 mm** |
 | Chennai (13.08°N, 80.27°E) | 14 mm | **180 mm** |
 
-Each model puts about 180 mm on the coast. They disagree by roughly **500–600 km** about
-*which* coast — and so about which few million people should be paying attention. Both
+On that run each model puts about 180 mm on the coast. They disagree by roughly
+**500–600 km** about *which* coast — and so about which few million people should be paying attention. Both
 started from the **same analysis at the same hour**; the divergence is the models, not
 their initial conditions. That is the whole argument for showing them side by side rather
 than picking one and presenting it as the forecast.
@@ -111,8 +112,10 @@ Four things this example does **not** show, which matter as much as what it does
 - **The five-day board only catches the edge of it.** The "Models differ" board covers
   the next five days, and inside that window Visakhapatnam is at 0 mm in *both* models —
   the landfall is at day 6–7. The board does surface the system, but as Chennai at
-  2.2 vs 19 mm, which is the first few hours of a 180 mm disagreement. Reading the
-  magnitude of this case needs the map and the point timeline, not the rankings.
+  2.2 vs 19 mm (2026-11-13 00Z run, read at 17:00 UTC — that window slides with the
+  clock, so the figure moves through the day even within one run), which is the first
+  few hours of a 180 mm disagreement. Reading the magnitude of this case needs the map
+  and the point timeline, not the rankings.
 - **Neither model is ground truth.** This app never verifies either against observations,
   so it can show *that* they disagree, never which one is right.
 
@@ -227,9 +230,11 @@ The repository deploys itself to GitHub Pages. Once:
 3. Run the **Build and deploy forecast** workflow once by hand
    (Actions → Build and deploy forecast → Run workflow).
 
-After that it runs itself at 09:30 and 21:30 UTC, picking up the 00z and 12z runs.
-Forecast data is republished with each deployment rather than committed, so the git
-history never accumulates binaries.
+After that it runs itself at 09:30 and 21:30 UTC for the 00z and 12z cycles, with
+catch-up attempts at 11:30 and 23:30 — GitHub queues scheduled workflows behind on-demand
+jobs and routinely runs them hours late. A catch-up that finds the same forecast simply
+republishes it. Forecast data is republished with each deployment rather than committed,
+so the git history never accumulates binaries.
 
 ## Repository layout
 
@@ -284,10 +289,10 @@ at 0.0 mm and Jaisalmer at 2.6 mm. A window extracted from the wrong longitudes 
 fail this immediately.
 
 The far north is *not* uniformly dry, and the check is written so it does not pretend
-otherwise: the northwest desert belt averaged 4.1 mm over ten days while the western
-Himalaya averaged 6.4 mm with individual cells reaching 70.8 mm, which is what a passing
-western disturbance looks like. Srinagar read 16.4 mm — almost all of it **snow**, as the
-limitations below explain.
+otherwise. Still on the **2026-11-13 00Z run**: the northwest desert belt averaged 4.1 mm
+over ten days while the western Himalaya averaged 6.4 mm with individual cells reaching
+70.8 mm, which is what a passing western disturbance looks like. Srinagar read 16.4 mm —
+almost all of it **snow**, as the limitations below explain.
 
 ### Four things that were not what the documentation implied
 
@@ -308,8 +313,9 @@ each is now covered by a test:
    requested date against a naive constant internally; the local GRIB cache had hidden
    it by skipping the download entirely.)
 4. **AIFS publishes `tp` in kg m⁻², not metres.** The measured ratio of AIFS to IFS
-   accumulated `tp` at T+24h, in their published units, was 949.7 — which is a **≈1000×
-   unit factor** with a **genuine ~5% model difference** riding on it, not a clean 1000×.
+   accumulated `tp` at T+24h, in their published units, was 949.7 on the **2026-11-12
+   12Z run** — which is a **≈1000× unit factor** with a **genuine ~5% model difference**
+   riding on it, not a clean 1000×.
    Divide the units out and AIFS carries about 5% less total water than IFS over the
    domain, the same smoothing tendency that shows up far more starkly in peak intensity.
    Units are read from each file and converted, and an unknown unit is an error rather
@@ -334,9 +340,11 @@ each is now covered by a test:
   reading a forecast, but the cube is not the right artefact for numerical verification —
   use the source GRIB for that.
 - **Negative-decrement clamping.** Consecutive accumulations are independently quantised
-  by GRIB packing, so ~0.4% of cells decrease slightly (worst case: one 1.22e-4 m
-  quantum). Those are clamped to zero, which adds about 0.07% to total rainfall. The
-  exact figures for each run are published in `meta.json` under `deaccumulation`.
+  by GRIB packing, so a small fraction of cells decrease slightly. On the **2026-11-12
+  00Z run** that was 0.37% of cells, worst case one 1.22e-4 m quantum, and clamping them
+  to zero added 0.069% to total rainfall. Those figures move run to run — a later run's
+  worst case was two quanta — so the exact ones are published per run in `meta.json`
+  under `deaccumulation` rather than fixed here.
 - **Forecast horizon capped at day 10** even though IFS runs to day 15.
 - **No verification.** The two models are compared against each other, never against
   observations, so the app can show *that* they disagree but never which is right.
